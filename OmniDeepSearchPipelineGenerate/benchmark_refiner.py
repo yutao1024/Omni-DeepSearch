@@ -6,12 +6,12 @@ import re
 import asyncio
 import copy
 from datetime import datetime
-from tavily import TavilyClient
+import aiohttp
 import random 
 from llm_provider import get_llm_provider
 from benchmark_filter import BenchmarkFilter 
 from live_wiki_walker import LiveWikiWalker 
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FILTERED_RUNS_DIR = os.path.join(BASE_DIR, "data_workspace", "filtered_runs")
 REFINED_RUNS_DIR = os.path.join(BASE_DIR, "data_workspace", "refined_runs")
@@ -19,21 +19,6 @@ REFINED_RUNS_DIR = os.path.join(BASE_DIR, "data_workspace", "refined_runs")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("Refiner-Pipeline")
 
-import os
-import json
-import yaml
-import logging
-import re
-from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import copy
-from tavily import TavilyClient
-from llm_provider import get_llm_provider
-from benchmark_filter import BenchmarkFilter 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
-logger = logging.getLogger("Refiner-Pipeline")
 
 class BenchmarkRefiner:
     def __init__(self, config_path="config/config.yaml", prompt_path="config/prompts.yaml",max_concurrent=20):
@@ -44,10 +29,12 @@ class BenchmarkRefiner:
 
         self.llm = get_llm_provider(self.config['llm'], self.config['llm']['default_provider'])
         
-        search_key = self.config.get('search_api_key')
-        if not search_key:
-            raise ValueError("search_api_key is missing in config.yaml")
-        self.tavily = TavilyClient(api_key=search_key)
+        self.serper_api_key = self.config.get('serper_api_key')
+        self.jina_api_key = self.config.get('jina_api_key')
+        if not self.serper_api_key:
+            raise ValueError("serper_api_key is missing in config.yaml")
+        if not self.jina_api_key:
+            raise ValueError("jina_api_key is missing in config.yaml")
 
         self.semaphore = asyncio.Semaphore(max_concurrent)
 
@@ -64,20 +51,61 @@ class BenchmarkRefiner:
         return None
 
     async def _execute_real_search_list(self, query):
-        logger.info(f"    [Tavily] Querying: {query}")
-        def _sync_search():
-            return self.tavily.search(query=query, search_depth="advanced", max_results=5, days=180)
+        logger.info(f"    [Serper] Querying: {query}")
 
+        search_url = "https://google.serper.dev/search"
+        search_payload = {
+            "q": query,
+            "num": 5,
+            "gl": "us",
+            "hl": "en"
+        }
         try:
-            response = await asyncio.to_thread(_sync_search)
-            valid_results = []
-            for r in response.get('results', []):
-                res_item = f"Source: {r.get('url')}\nTitle: {r.get('title')}\nContent: {r.get('content')}"
-                valid_results.append(res_item)
-            return valid_results 
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    search_url,
+                    json=search_payload,
+                    headers={"X-API-KEY": self.serper_api_key, "Content-Type": "application/json"},
+                    timeout=15
+                ) as resp:
+                    if resp.status != 200:
+                        logger.error(f"Serper search failed: {resp.status}")
+                        return []
+                    search_data = await resp.json()
         except Exception as e:
             logger.error(f"    [Search Error] {e}")
             return []
+
+        organic_results = search_data.get("organic", [])[:5]
+        if not organic_results:
+            return []
+
+        async def _fetch_one(link, title, snippet):
+            jina_url = f"https://r.jina.ai/{link}"
+            headers = {"Authorization": f"Bearer {self.jina_api_key}"}
+            try:
+                async with aiohttp.ClientSession(headers=headers) as session:
+                    async with session.get(jina_url, timeout=30) as resp:
+                        if resp.status == 200:
+                            text = await resp.text()
+                            return f"Source: {link}\nTitle: {title}\nContent: {text}"
+                        else:
+                            logger.warning(f"Jina fetch failed for {link}: status {resp.status}")
+                            return f"Source: {link}\nTitle: {title}\nContent: {snippet}"
+            except Exception as e:
+                logger.warning(f"Jina fetch failed for {link}: {e}")
+                return f"Source: {link}\nTitle: {title}\nContent: {snippet}"
+
+        tasks = []
+        for item in organic_results:
+            link = item.get("link")
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
+            if link:
+                tasks.append(_fetch_one(link, title, snippet))
+
+        results = await asyncio.gather(*tasks)
+        return [r for r in results if r]
 
     async def _extend_and_evolve_item(self, category, item):
         identity_data = item.get('video_info', {}).get('identity', {})

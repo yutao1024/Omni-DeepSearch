@@ -1,6 +1,5 @@
 serper_api_key: "serper_key"
 
-search_api_key: ""
 
 jina_api_key: "jina_key" 
 
@@ -12,7 +11,7 @@ llm:
 
   mimo:
     api_key: "" 
-    base_url: "https://openrouter.ai/api/v1"
+    base_url: ""
     model_name: "xiaomi/mimo-v2.5"
     temperature: 0.0
     max_tokens: 32768 
@@ -21,7 +20,7 @@ llm:
 
   qwen:
     api_key: "" 
-    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    base_url: ""
     model_name: "qwen3.5-omni-plus"  
     temperature: 0.0
     max_tokens: 8192  
@@ -31,7 +30,7 @@ llm:
 
   gemini:
     api_key: ""
-    base_url: "https://api.dubrify.com/v1"
+    base_url: ""
     model_name: "gemini-3.1-pro-preview"
     temperature: 0.0
     max_tokens: 32768
@@ -40,7 +39,7 @@ llm:
 
   nvidia:
     api_key: "" 
-    base_url: "https://openrouter.ai/api/v1"
+    base_url: ""
     model_name: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     temperature: 0.0
     max_tokens: 16384
@@ -50,7 +49,7 @@ llm:
 
   gpt:
     api_key: ""
-    base_url: "https://api.dubrify.com/v1"
+    base_url: ""
     model_name: "gpt-5.4"
     temperature: 0.0
     max_tokens: 16384
@@ -59,7 +58,7 @@ llm:
 
   claude:
     api_key: ""
-    base_url: "https://api.dubrify.com/v1"
+    base_url: ""
     model_name: "claude-sonnet-4-6" 
     temperature: 0.0
     max_tokens: 16384

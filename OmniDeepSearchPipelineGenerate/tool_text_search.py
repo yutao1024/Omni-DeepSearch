@@ -8,7 +8,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from serpapi import GoogleSearch
 from llm_provider import get_llm_provider
 from async_utils import async_retry, run_in_thread
-from key_manager import key_manager
 import logging
 logger = logging.getLogger(__name__)
 
@@ -107,45 +106,23 @@ async def call_serpapi(query: str, topk: int, search_api_key: str) -> List[Dict[
 
 
 @async_retry(max_retries=3)
-async def call_serper(query: str, topk: int = 3) -> List[Dict[str, str]]:
-    cached = key_manager.check_cache("serper_text", query)
-    if cached: return cached
-
-    async with key_manager.search_semaphore:
-        while True:
-            current_key = await key_manager.get_active_key("serper")
-            headers = {"X-API-KEY": current_key, "Content-Type": "application/json"}
-            url = "https://google.serper.dev/search"
-            
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(url, json={"q": query}, headers=headers, timeout=15) as resp:
-                        status_code = resp.status
-                        try:
-                            data = await resp.json()
-                        except:
-                            data = {"raw_text": await resp.text()}
-
-                        if status_code == 200:
-                            organic = data.get("organic", [])
-                            res = [{"link": i.get("link"), "title": i.get("title"), "snippet": i.get("snippet")} for i in organic[:topk]]
-                            key_manager.update_cache("serper_text", query, res)
-                            return res
-
-                        action = await key_manager.report_api_error("serper", current_key, status_code, data, query)
-                        if action == "RETRY_WAIT":
-                            await asyncio.sleep(5)
-                            continue
-                        elif action == "ROTATE":
-                            continue
-                        else:
-                            break
-            except Exception as e:
-                logger.error(f"Text Search Network Error: {e}")
-                await asyncio.sleep(2)
-                break
-    return []
-
+@async_retry(max_retries=3)
+async def call_serper(query: str, topk: int = 3, api_key: str = None) -> List[Dict[str, str]]:
+    if not api_key:
+        logger.error("Serper API key is missing")
+        return []
+    headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+    url = "https://google.serper.dev/search"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json={"q": query}, headers=headers, timeout=15) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                logger.error(f"Serper search failed with status {resp.status}: {text}")
+                return []
+            data = await resp.json()
+            organic = data.get("organic", [])
+            return [{"link": i.get("link"), "title": i.get("title"), "snippet": i.get("snippet")} for i in organic[:topk]]
+        
 async def is_snippet_useful(original_question: str, current_thought: str, query: str, title: str, snippet: str, config: dict) -> bool:
     if not title and not snippet:
         return False
@@ -171,32 +148,31 @@ Output ONLY "Yes" or "No"."""
     response = await _call_judge_model(system_prompt, user_prompt, config)
     return _safe_yes_no(response)
 
-async def _fetch_jina_pages(links: List[str], titles: List[str], **kwargs) -> List[str]:
+async def _fetch_jina_pages(links: List[str], titles: List[str], jina_api_key: str = None) -> List[str]:
     results = []
+    if not jina_api_key:
+        return results
     
     async def _fetch_one(link, title):
-        while True:
-            current_key = await key_manager.get_active_key("jina")
-            if not current_key: return None
-            
-            headers = {"Authorization": f"Bearer {current_key}"}
-            url = f"https://r.jina.ai/{link}"
-            try:
-                async with aiohttp.ClientSession(headers=headers) as session:
-                    async with session.get(url, timeout=30) as resp:
-                        if resp.status == 200:
-                            text = await resp.text()
-                            return f"{title}\n{text}"
-                        elif resp.status == 402: 
-                            await key_manager.mark_exhausted("jina", current_key)
-                            continue 
-                        else:
-                            return None
-            except: return None
+        headers = {"Authorization": f"Bearer {jina_api_key}"}
+        url = f"https://r.jina.ai/{link}"
+        try:
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.get(url, timeout=30) as resp:
+                    if resp.status == 200:
+                        text = await resp.text()
+                        return f"{title}\n{text}"
+                    else:
+                        logger.warning(f"Jina fetch failed for {link}: status {resp.status}")
+                        return None
+        except Exception as e:
+            logger.error(f"Jina fetch error: {e}")
+            return None
 
     for link, title in zip(links, titles):
         res = await _fetch_one(link, title)
-        if res: results.append(res)
+        if res:
+            results.append(res)
     return results
 
 def _format_web_doc(doc_item: str) -> str:
@@ -216,7 +192,7 @@ async def fetch_webpage(query: str, config: dict, topk: int = 3, engine: str = "
     if engine == "serpapi":
         search_results = await call_serpapi(query, topk, search_api_key)
     else:
-        search_results = await call_serper(query, topk) 
+        search_results = await call_serper(query, topk, search_api_key)
 
     if not search_results: return []
 
@@ -242,7 +218,7 @@ async def search(query_list: List[str], config: dict, original_question: str, cu
     if engine == "serpapi":
         search_results = await call_serpapi(query, topk, search_api_key)
     else:
-        search_results = await call_serper(query, topk) 
+        search_results = await call_serper(query, topk, search_api_key)
 
     format_reference = ""
     idx = 1

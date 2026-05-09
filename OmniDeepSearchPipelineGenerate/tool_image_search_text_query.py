@@ -9,7 +9,7 @@ from datetime import datetime
 from serpapi import GoogleSearch
 from wiki_utils import download_and_resize_image 
 from async_utils import async_retry, run_in_thread
-from key_manager import key_manager
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -47,46 +47,21 @@ async def append_jsonl_async(log_path: str, obj: Dict[str, Any]) -> None:
     
     await run_in_thread(_sync_append)
 
-
-
 @async_retry(max_retries=3)
-async def get_serper_image_response(query: str, **kwargs) -> Dict[str, Any]:
-    cached = key_manager.check_cache("serper_image", query)
-    if cached: return cached
-
-    async with key_manager.search_semaphore:
-        while True:
-            current_key = await key_manager.get_active_key("serper")
-            headers = {"X-API-KEY": current_key, "Content-Type": "application/json"}
-            url = "https://google.serper.dev/images"
-            
-            try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.post(url, json={"q": query}, headers=headers, timeout=15) as resp:
-                        status_code = resp.status
-                        try:
-                            data = await resp.json()
-                        except:
-                            data = {"raw_text": await resp.text()}
-
-                        if status_code == 200:
-                            key_manager.update_cache("serper_image", query, data)
-                            return data
-
-
-                        action = await key_manager.report_api_error("serper", current_key, status_code, data, query)
-                        if action == "RETRY_WAIT":
-                            await asyncio.sleep(5)
-                            continue
-                        elif action == "ROTATE":
-                            continue
-                        else:
-                            break
-            except Exception as e:
-                logger.error(f"Image Search Network Error: {e}")
-                await asyncio.sleep(2)
-                break
-    return {}
+async def get_serper_image_response(query: str, api_key: str, **kwargs) -> Dict[str, Any]:
+    if not api_key:
+        logger.error("Serper API key is missing for image search")
+        return {}
+    headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+    url = "https://google.serper.dev/images"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json={"q": query}, headers=headers, timeout=15) as resp:
+            if resp.status != 200:
+                text = await resp.text()
+                logger.error(f"Serper image search failed with status {resp.status}: {text}")
+                return {}
+            data = await resp.json()
+    return data
 
 async def get_serpapi_image_response(query: str, search_api_key: str) -> List[Dict[str, Any]]:
     """使用线程池执行同步的 SerpApi 请求"""
@@ -205,7 +180,7 @@ async def _search_online_single_query(
     
     search_results = None
     if engine == "serper":
-        search_results = await get_serper_image_response(query) 
+        search_results = await get_serper_image_response(query, search_api_key)
         cached_items = await parse_serper_image_response(
             data_id=data_id,
             search_results=search_results,

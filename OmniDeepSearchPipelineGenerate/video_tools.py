@@ -11,8 +11,9 @@ import re
 import shutil
 import logging
 from typing import List, Dict, Any
+import yaml
 from async_utils import async_retry, run_in_thread
-from key_manager import key_manager
+
 
 VENV_PATH = sys.prefix 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -42,78 +43,64 @@ class VideoTools:
 
     @staticmethod
     async def search_videos(query: str, config_dict="config/config.yaml", max_results=5) -> List[Dict[str, Any]]:
-        cached = key_manager.check_cache("serper_video", query)
-        if cached: return cached
+        # 加载配置
+        if isinstance(config_dict, str):
+            config_path = os.path.abspath(os.path.join(BASE_DIR, config_dict))
+            with open(config_path, 'r') as f:
+                conf = yaml.safe_load(f)
+        else:
+            conf = config_dict
 
-        async def _perform_search():
-            url = "https://google.serper.dev/search"
-            payload = {
-                "q": f"{query} site:youtube.com",
-                "num": 10,
-                "gl": "us",
-                "hl": "en",
-                "type": "videos"
-            }
-
-            async with key_manager.search_semaphore:
-                while True:
-                    current_key = await key_manager.get_active_key("serper")
-                    headers = {'X-API-KEY': current_key, 'Content-Type': 'application/json'}
-                    
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            async with session.post(url, json=payload, headers=headers, timeout=15) as resp:
-                                status_code = resp.status
-                                try:
-                                    data = await resp.json()
-                                except:
-                                    data = {"raw_text": await resp.text()}
-
-                                if status_code == 200:
-                                    results = []
-                                    raw_items = data.get("videos", [])
-                                    if not raw_items:
-                                        raw_items = data.get("organic", [])
-
-                                    for item in raw_items:
-                                        if len(results) >= max_results: break
-                                        link = item.get("link", "")
-                                        title = item.get("title", "")
-                                        snippet = item.get("snippet", "")
-                                        duration = item.get("duration", "Unknown")
-
-                                        if "youtube.com/watch?v=" in link or "youtu.be/" in link:
-                                            vid_id = "unknown"
-                                            if "v=" in link:
-                                                try: vid_id = link.split("v=")[1].split("&")[0]
-                                                except: pass
-                                            elif "youtu.be/" in link:
-                                                try: vid_id = link.split("youtu.be/")[1].split("?")[0]
-                                                except: pass
-
-                                            results.append({
-                                                "id": vid_id, "title": title, "url": link,
-                                                "description": snippet, "duration": duration
-                                            })
-                                    
-                                    key_manager.update_cache("serper_video", query, results)
-                                    return results
-
-                                action = await key_manager.report_api_error("serper", current_key, status_code, data, query)
-                                if action == "RETRY_WAIT":
-                                    await asyncio.sleep(5)
-                                    continue
-                                elif action == "ROTATE":
-                                    continue
-                                else:
-                                    break
-                    except Exception as e:
-                        logger.error(f"Video Search Network Error: {e}")
-                        await asyncio.sleep(2)
-                        break
+        serper_api_key = conf.get('serper_api_key')
+        if not serper_api_key:
+            logger.error("serper_api_key is missing in config. Cannot search videos.")
             return []
 
-        return await VideoTools._async_retry_wrapper(_perform_search)
+        url = "https://google.serper.dev/search"
+        payload = {
+            "q": f"{query} site:youtube.com",
+            "num": 10,
+            "gl": "us",
+            "hl": "en",
+            "type": "videos"
+        }
+
+        @async_retry(max_retries=3, base_delay=2.0)
+        async def _perform_search():
+            headers = {'X-API-KEY': serper_api_key, 'Content-Type': 'application/json'}
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload, headers=headers, timeout=15) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise Exception(f"Serper search failed with status {resp.status}: {text}")
+                    data = await resp.json()
+                    results = []
+                    raw_items = data.get("videos", []) or data.get("organic", [])
+                    for item in raw_items:
+                        if len(results) >= max_results:
+                            break
+                        link = item.get("link", "")
+                        if "youtube.com/watch?v=" in link or "youtu.be/" in link:
+                            vid_id = "unknown"
+                            if "v=" in link:
+                                try:
+                                    vid_id = link.split("v=")[1].split("&")[0]
+                                except:
+                                    pass
+                            elif "youtu.be/" in link:
+                                try:
+                                    vid_id = link.split("youtu.be/")[1].split("?")[0]
+                                except:
+                                    pass
+                            results.append({
+                                "id": vid_id,
+                                "title": item.get("title", ""),
+                                "url": link,
+                                "description": item.get("snippet", ""),
+                                "duration": item.get("duration", "Unknown")
+                            })
+                    return results
+        return await _perform_search()
 
     @staticmethod
     async def download_videos(url_list, save_dir, config_dict="config/config.yaml", height=720, logger_obj=None, min_dur=None, max_dur=None, max_concurrent=5):
