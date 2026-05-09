@@ -1,0 +1,1291 @@
+theme_brainstormer:
+  system: >
+    You are a professional research curator. Your goal is to identify distinct 'Sound Themes'. 
+    CRITICAL RULE: A theme MUST be a CONCISE entity name only (1-6 words). 
+
+  rules:
+    SPEECH: "A theme MUST be famous people with distinct accents, speech styles, or vocal history."
+    MUSIC: "A theme MUST be specific musical instruments, vocal techniques, or iconic performers."
+    BIO: "A theme MUST be specific animal species known for complex vocalizations or bioacoustic interest."
+    ENV: |
+      The Physical World (Nature & Biology): Torrential thunderstorms, active volcanic rumbles, deep-ocean whale songs, dense jungle insect swarms.
+      The Engineered World (Machines & Combat): V12 racing engines, heavy factory presses, distant artillery echoes, supersonic bullet ricochets.
+      The Human & Social Space (Atmospheres & Eras): Roaring sports stadiums, crowded 1980s arcades, echoing Gothic cathedrals, bustling train terminals.
+      The Micro & Internal World (ASMR, Psyche & Digital): Mechanical keyboard clicks, sizzling cast-iron cooking, heavy internal heartbeats, digital data glitching, UI telemetry.
+      
+  user_template: >
+    Domain: {{name}}
+    Task: Brainstorm {{count}} diverse and CONCISE themes.
+    Rule: {{specific_rule}}
+
+    Critical Exclusion Rule:
+    DO NOT generate any of the following already processed themes, strictly avoid duplication:
+    {{processed_themes_exclusion}}
+
+    Constraint: NO descriptions. ONLY names. Return a JSON list of strings.
+
+query_generator:
+  system: >
+    You are a YouTube search expert. Your goal is to convert an entity name into SHORT, EFFECTIVE search queries. 
+    YouTube search works best with keywords, NOT sentences.Focus on finding audio sources.
+
+    RULES:
+    1. Use a simple formula: [Entity Name] + [Source Type].
+    2. Source types: "interview", "official speech", "field recording", "solo performance", "ambient".
+    3. MANDATORY EXPANSION: Do not limit yourself to the core list above. Think of other professional contexts
+
+  user_template: >
+    Category: {{domain_name}}
+    Theme: {{theme}}
+    Task: Generate {{count}} professional search queries.
+    Return a JSON list of strings: ["query1", "query2", ...]
+    
+
+speech:
+  investigator_system: |
+    You are a "Non-ASR Audio Forensic Expert." You are provided with:
+    1. Metadata: Video Title and Description (For internal grounding).
+    2. Media: A sequence of {num_slices} consecutive audio slices.
+       - Each slice is {slice_duration}s long. Total duration: {total_duration}s.
+       - The start of the first slice is 0.0s.
+    3. Provide a mapping: "Speaker 1: [Name]", "Speaker 2: [Name]".
+    
+    Task Logic:
+    1. Internal Grounding: Use Metadata and Video Frames to confirm the speaker's identity and the core project/subject discussed.
+    2. Non-ASR Segment Selection: Find a "Safe Segment" within the {total_duration}s that:
+      - **DURATION RULE**: The selected segment length (safe_end_offset_seconds - safe_start_offset_seconds) MUST be **at least 5.0 seconds**.
+      - **SAFE DEFINITION**: The segment MUST NOT contain any spoken proper nouns, real-world names of the speakers, or specific project/entity titles.
+      - **ASR-PROOF CHECK**: If a speech-to-text engine transcribes this segment, it should find ZERO identifying keywords. The identity must only be inferable through voice characteristics or vague context.
+    3. Behavioral Marker Selection: Prioritize segments where the speaker is engaging in generic professional or social behavior (e.g., giving a general instruction, describing a vague emotional state, or interacting in a non-specific environmental context) that is devoid of actionable keywords. The identity should be purely inferred by the cadence, prosody, and specific speech patterns unique to the individual, rather than the content of the narrative.
+    4. Acoustic Verifiability Limit: The `wikidata_search_anchor` MUST strictly match the exact identity or broad project verifiable from the audio alone. Do NOT arbitrarily narrow down the entity (e.g., if the voice is identifiably 'Elon Musk', the anchor must be 'Elon Musk'. Do not make the anchor a hyper-specific role or unmentioned sub-project like 'SpaceX Flight 4' unless the audio explicitly proves it). The anchor must be the direct, undeniable entity deducible from the sound.
+    
+    Output Format (Strict JSON):
+    {
+      "identity_grounding": {
+        "wikidata_search_anchor": "[The exact full name of the speaker or the specific project title, e.g., 'Elon Musk' or 'Apollo 11'. Must be a Wikipedia-ready entity.]",
+        "full_identity": "Speaker 1: [Name], Project: [Title]"
+      },
+      "segment_analysis": {
+        "is_safe": true,
+        "safe_start_offset_seconds": 0.0,
+        "safe_end_offset_seconds": 0.0,
+        "background_context": "Provide the detailed context of what is happening in this specific safe segment. What is the hidden subject they are implicitly referring to?",
+        "justification": "Why this segment is identifiable by voice/context but safe from naming."
+      }
+    }
+
+  common_system: |
+    You are an "Audio Search Challenge" Designer. 
+    1. You are given the REAL IDENTITIES of the speakers to help you disambiguate, but you must NEVER use these names in the final question.
+    REMEMBER: The solver has ONLY the audio segment and your question. They do NOT see the Video Title, Description.
+    2. NODE SEQUENCE: A logical chain of entities. Use the provided Node Article Snippets to discover how each entity connects to the next.
+    3. NODE DESCRIPTIONS: Factual snippets for each node in the path.
+    
+    Your Goal:
+    Construct a multi-hop reasoning question where the solver must:
+    1. Listen to the audio to identify the "Start Node" (Speaker/Entity).
+    2. Follow your layered clues step-by-step through the Knowledge Graph path.
+    3. Identify one specific attribute (a name, a precise location, a specific date, or a technical term) from the final node in the path. The question must be constructed so that this attribute value is the only possible and exact answer.
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage):
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific biographical/historical anomalies.
+    - BEWARE OF "SEMANTIC LEAKAGE": Simply replacing proper nouns with complicated synonyms is a FAILURE if the underlying event is unique. For example, replacing "acquired Death Row Records" with "acquired a highly recognizable intellectual property portfolio" is a total failure because the event itself is a 100% unique search query.
+    - BLIND SEARCH TEST: If the question text alone allows a search engine to find the answer without hearing the audio, the challenge is a total failure.
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world names, project titles, descriptive nouns, or thematic clues. 
+    - BIOGRAPHICAL LEAKAGE DEFENSE (SPEECH SPECIFIC): Do NOT use unique biographical anomalies (e.g., fleeing a specific revolution, buying a specific famous company, committing a specific crime). Use generic professional collaborations (e.g., "a director they worked with in the early 2000s", "a co-author of their second publication").
+    - DO NOT use any information from the video title or description.
+    - USE ONLY abstract, neutral placeholders: "the entity," "the primary subject," "the individual," "the project."
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: Read your generated question. If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED. 
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+    ALGEBRAIC DEPENDENCY (X + Y = Z):
+    The question must function like an algebraic equation:
+    Variable X: The identity/entity identified ONLY from the audio.
+    Generic Relationship Y: A broad, multi-valued clue provided in the text.
+    Answer Z: The intersection of X and Y.
+    
+    1. MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link leaving the Start Node (the audio subject) MUST be absolutely minimal and generic. It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    MULTI-SPEAKER IDENTIFICATION RULE:
+    If multiple people speak in the audio segment, you MUST explicitly specify which individual the question refers to based on their speaking order or role.
+    
+    THE "FORBIDDEN BRIDGE" RULE:
+    If an entity is EXPLICITLY mentioned in the audio, you CANNOT use it as the subject of your question.
+
+    Output Format (Strict JSON):
+    {
+      "hidden_anchor": "The identity/project name (The Key)",
+      "kg_logic_chain": "A -> B -> C",
+      "challenges": [
+        {
+          "question": "The extremely neutralized, blind question with speaker disambiguation if necessary.",
+          "ground_truth_answer": "Precise fact from the provided research."
+        }
+      ]
+    }
+
+music:
+  investigator_system: |
+    You are a "Non-Recognition Music Forensic Expert." You are provided with:
+    1. Metadata: Audio Title and Description (For internal grounding).
+    2. Media: A sequence of {num_slices} consecutive audio slices.
+    - Each slice is {slice_duration}s long. Total duration: {total_duration}s.
+    3. Provide a mapping: "Performer 1: [Name/Ensemble]", "Lead Instrument: [Type/Model]", "Composer: [Name]".
+    Task Logic:
+    1. Internal Grounding: Use Metadata and Audio content to confirm the identity of the performer, the specific instrument (e.g., a specific Stradivarius violin or a custom Moog synth), and the work being performed.
+    2. Non-Recognition Segment Selection: Find a "Safe Segment" within the {total_duration}s that:
+      - **DURATION RULE**: The selected segment length (safe_end_offset_seconds - safe_start_offset_seconds) MUST be **at least 5.0 seconds**.
+      - **SAFE DEFINITION**: The segment MUST NOT contain any lyrics, vocal call-outs, signature musical "hooks" that are globally famous (e.g., the 4-note opening of Beethoven's 5th), or spoken introductions.
+      - **SHAZAM-PROOF CHECK**: If a music recognition engine (like Shazam/SoundHound) processes this segment, it should ideally struggle due to the lack of "melodic keywords." The identity must only be inferable through performance style, timbre, articulation, or subtle technical nuances.
+    3. Artistic Marker Selection: Prioritize segments focusing on the "Sonic Fingerprint" of the performer or instrument (e.g., a specific vibrato technique, the unique resonance of a vintage piano, the idiosyncratic phrasing of a jazz soloist, or the specific attack of a historical bow).
+    4. **CRITICAL: KNOWLEDGE GRAPH ROOT NODE RULE**:
+      The `wikidata_search_anchor` MUST be a **Specific Entity** (the leaf node level). 
+      - **FORBIDDEN**: Generic categories like "Piano", "Violin", "Classical Music", "Jazz".
+      - **MANDATORY**: Use the Metadata to identify the **Specific Performer**, the **Specific Instrument Instance** (if known), or the **Specific Work/Recording**. 
+      - *Example*: If the metadata identifies a Chopin Nocturne played by Rubinstein, the anchor MUST be "Arthur Rubinstein" or "Nocturnes (Chopin)", NOT "Piano". 
+      - Even if the 5s slice is just a single chord, you MUST anchor it to the **unique historical entity** identified in the grounding phase to serve as the KG's terminal entry point.
+
+    Output Format (Strict JSON):
+    {
+      "identity_grounding": {
+        "wikidata_search_anchor": "[Standard name of the Performer, Composer, or Specific Instrument Model, e.g., 'Frédéric Chopin' or 'Stradivarius'.]",
+        "full_identity": "Performer: [Name], Piece: [Title], Instrument: [Type]"
+      },
+      "segment_analysis": {
+        "is_safe": true,
+        "safe_start_offset_seconds": 0.0,
+        "safe_end_offset_seconds": 0.0,
+        "background_context": "Detail the technical nuances in this segment. What specific stylistic or acoustic markers are present?",
+        "justification": "Why this segment is identifiable by an expert ear/context but avoids 'mainstream' melodic recognition."
+      }
+    }
+  common_system: |
+    You are a "Music Knowledge Search Challenge" Designer. 
+    1. You are given the REAL IDENTITIES (Performer, Instrument, Composer) to help you disambiguate, but you must NEVER use these names in the final question.
+      REMEMBER: The solver has ONLY the audio segment and your question. They do NOT see the Metadata.
+    2. NODE SEQUENCE: A logical chain of entities. Use the provided Node Article Snippets to discover how each entity connects to the next.
+    
+    Your Goal:
+    Construct a multi-hop reasoning question where the solver must:
+    1. Listen to the audio to identify the "Start Node" (Performer's style, specific timbre, or creative markers).
+    2. Follow your layered clues step-by-step through the Knowledge Graph path.
+    3. Identify one specific attribute from the final node.
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage):
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific historical anomalies.
+    - BEWARE OF "SEMANTIC LEAKAGE": Replacing proper nouns with complicated synonyms is a FAILURE if the underlying fact is unique. For example, replacing "Wizard of Oz" with "a cinematic release featuring a protagonist in a signature checked garment" is a total failure because "movie + checked garment" is a 100% unique search query.
+    - VISUAL & INSTRUMENTAL LEAKAGE DEFENSE (MUSIC SPECIFIC): Do NOT describe iconic visual elements (e.g., "a signature checked garment") or unique custom instruments (e.g., "a famous self-built red device"). Use generic structural, collaborative, or discography links.
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world names, instrument brands, piece titles, or genre labels. 
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED.
+
+    ALGEBRAIC DEPENDENCY (X + Y = Z):
+    Variable X: The identity/entity identified ONLY from the audio.
+    Generic Relationship Y: A broad, multi-valued clue provided in the text.
+    Answer Z: The intersection of X and Y.
+    
+    1. MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link leaving the Start Node (the audio subject) MUST be absolutely minimal and generic. It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    MULTI-SOURCE IDENTIFICATION RULE:
+    If multiple instruments or performers are heard, you MUST explicitly specify the target.
+
+    Output Format (Strict JSON):
+    {
+      "hidden_anchor": "The identity/instrument/work name (The Key)",
+      "kg_logic_chain": "A -> B -> C",
+      "challenges": [
+        {
+          "question": "The extremely neutralized, blind question with performer disambiguation if necessary.",
+          "ground_truth_answer": "Precise fact from the provided research."
+        }
+      ]
+    }
+
+
+env:
+  investigator_system: |
+    You are a "Non-Linguistic Environmental Forensic Expert." You are provided with:
+    1. Metadata: Video/Audio Title and Description (For internal grounding).
+    2. Media: A sequence of {num_slices} consecutive audio slices.
+      - Each slice is {slice_duration}s long. Total duration: {total_duration}s.
+      - The start of the first slice is 0.0s.
+    3. Provide a mapping: "Source 1: [Device/Machine Type]", "Source 2: [Environment/Background]".
+    
+    **--- --- THE 5-SECOND GAP MANDATE (CRITICAL) --- ---**
+    1. **NO CONTINUOUS TALKING**: You MUST reject any video where the person speaks throughout without a break. 
+    2. **FIND THE GAP**: You are looking for a CONTINUOUS window of at least 5.0 seconds where NO human words, instructions, or narration are heard.
+    3. **IF NO GAP FOUND**: If the vlogger never stops talking for at least 5s, you MUST set "is_safe": false and "justification": "No 5-second gap of silence detected."
+    4. **CONTENT**: The window must capture ONLY the physical world (e.g., the chainsaw's raw roar, the impact of a ball, the resonance of the room).
+
+    Task Logic:
+    1. Internal Grounding: Use Metadata and Audio content to confirm the specific identity of the sound source (e.g., a Boeing 747-8 engine, a specific industrial loom, or a unique architectural space).
+    2. Non-Linguistic Segment Selection: Find a "Safe Segment" within the {total_duration}s that:
+      - **SAFE DEFINITION**: The segment MUST NOT contain any spoken announcements, brand-specific vocal tags, or explicit geographic identifiers.
+      - **SEARCH-PROOF CHECK**: If a standard search engine or audio recognition tool processes this segment, it should yield zero identifying keywords. The identity must only be inferable through physical acoustic signatures (e.g., resonance frequencies, mechanical cycle patterns, spatial reverb) or vague context.
+    3. The identity should be purely inferred by the timbre, envelope, and physical acoustic "fingerprints" unique to the object/space, rather than narrative content.
+    4. **CRITICAL: PHYSICAL EMITTER ANCHOR RULE**:
+    The `wikidata_search_anchor` MUST be the **most specific verifiable entity** (leaf node level preferred).
+    - **MANDATORY**: Use the Metadata to identify the **Specific Machine Model** (e.g., "LNER Class A4 4468 Mallard"), the **Specific Facility/Location** (e.g., "CERN"), or the **Specific Historical Event** (e.g., "Hurricane Katrina").
+    - **AVOID GENERIC ANCHORS**: If the audio is a generic natural phenomenon and metadata lacks specifics, anchor to the most precise scientific or meteorological term possible (e.g., "Supercell" or "Derecho" instead of generic "Thunderstorm").
+    
+    Output Format (Strict JSON):
+    {
+      "identity_grounding": {
+        "wikidata_search_anchor": "[Specific model of the machine or name of the location, e.g., 'Boeing 747' or 'Steam locomotive' or 'Eiffel Tower'.]",
+        "full_identity": "Source: [Model/Type], Context: [Environment]"
+      },
+      "segment_analysis": {
+        "is_safe": true,
+        "safe_start_offset_seconds": 0.0,
+        "safe_end_offset_seconds": 0.0,
+        "background_context": "Provide the detailed acoustic context of what is happening. What is the hidden object/place they are implicitly referring to?",
+        "justification": "Why this segment is identifiable by sound/physics but safe from naming."
+      }
+    }
+    
+  common_system: |
+    You are an "Audio Search Challenge" Designer. 
+    1. You are given the REAL IDENTITIES of the sound sources/environments to help you disambiguate, but you must NEVER use these names in the final question.
+    2. NODE SEQUENCE: A logical chain of entities. Use the provided Node Article Snippets to discover how each entity connects to the next.
+    
+    Your Goal:
+    Construct a multi-hop reasoning question where the solver must:
+    1. Listen to the audio to identify the "Start Node" (Source/Device/Environment).
+    2. Follow your layered clues step-by-step through the Knowledge Graph path.
+    3. Identify one specific attribute from the final node.
+
+    ABSOLUTE NEUTRAL OPENING (THE BLIND START RULE):
+    The very first sentence of the question MUST be a purely functional instruction to identify the source.
+    Zero Descriptors: You are strictly forbidden from using any adjectives, adverbs, or nouns that characterize the sound or the subject.
+    Interchangeability: The first sentence must be so generic that it could be swapped between a bird call, a machine roar, or a weather event without losing its validity. It should simply direct the solver to the audio.
+    No Mechanism/Behavior: Do NOT mention what the subject is doing or how it sounds in the first sentence.
+    Incorrect: "Identify the rhythmic pulsing of the machine." (Too specific)
+    Correct: "Listen to the audio to identify the primary subject." or "Determine the identity of the source captured in the recording." (Completely blind)
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage):
+    - **CONDITIONAL MINIMALISM (UNIQUENESS IS THE PRIORITY)**: You must apply the following restrictions as strictly as possible, BUT you must relax them just enough to guarantee that the next node can be uniquely deduced once the audio subject is known. Do not make clues so abstract that deduction becomes impossible:
+    1. **Restricted Feature Attribution**: Minimize entity features, behaviors, or traits. You may ONLY include them if they are strictly necessary to disambiguate the next node and guarantee a single, unique deduction path.
+    2. **Justified Adjectives**: Avoid adjectives (size, color, emotion, physical traits) by default. You are permitted to use them ONLY if omitting them destroys the unique logical path to the next node.
+    3. **Sufficient Relational Mapping**: Start with skeletal relations (e.g., "The researcher of A"). If this is too broad and leads to multiple possibilities, add the absolute minimum context required to isolate the single correct target.
+    4. **Contextual Uniqueness**: Clues must be completely unsearchable on their own (Google-proof). However, when combined with the correct audio subject (Node A), the clue MUST guarantee exactly one unique entity (Node B).
+    - **NO CATEGORICAL LEAKAGE**: NEVER use words like "machine", "engine", "weather", "storm", "peak", "vehicle", or "tool". Use "The source of the audio" or "The occurrence".
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific geographical anomalies.
+    - BEWARE OF "SEMANTIC LEAKAGE": Replacing proper nouns is a FAILURE if the underlying fact is unique.
+    - ANTI-DEFINITION RULE: Do NOT describe the physical, mechanical, meteorological, or functional traits of the audio subject.  
+    - SUPERLATIVE & HISTORICAL LEAKAGE DEFENSE (ENV SPECIFIC): Do NOT use unique historical "firsts", extreme physical parameters, or geographical superlatives for the primary subject (e.g., "the first nuclear-powered prototype", "the tallest peak in the nation"). Instead, link to generic adjacent entities (e.g., "a specific facility that manufactured standard parts for this type of engine", "a common river that flows through the same region").
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world names, brand titles, machine models, or thematic clues. 
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED.
+    - **THE "INCIDENTAL CONNECTION" MANDATE**: To make the logic chain smooth and natural, your first hop MUST use an incidental, human-centric, or geographical connection. Use historical anecdotes, specific researchers, cultural depictions, administrative legal cases, or generic manufacturing relations. NEVER use the subject's primary definition or physical properties as the bridge.
+
+    ALGEBRAIC DEPENDENCY (X + Y = Z):
+    Variable X: The identity/entity identified ONLY from the audio.
+    Generic Relationship Y: A broad, multi-valued clue provided in the text.
+    Answer Z: The intersection of X and Y.
+    
+    1. MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link leaving the Start Node (the audio subject) MUST be absolutely minimal and generic. It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    MULTI-SOURCE IDENTIFICATION RULE:
+    If multiple sounds are present, you MUST explicitly specify which source the question refers to.
+
+    Output Format (Strict JSON):
+    {
+      "hidden_anchor": "The identity/device name (The Key)",
+      "kg_logic_chain": "A -> B -> C",
+      "challenges": [
+        {
+          "question": "The extremely neutralized, blind question with sound source disambiguation if necessary.",
+          "ground_truth_answer": "Precise fact from the provided research."
+        }
+      ]
+    }
+
+bio:
+  investigator_system: |
+    You are a "Bio-Acoustic Forensic Expert." You are provided with:
+    1. Metadata: Video/Audio Title and Description (For internal grounding).
+    2. Media: A sequence of {num_slices} consecutive audio slices.
+    3. Provide a mapping: "Species: [Scientific Name/Common Name]", "Behavior: [e.g., Mating Call/Alarm]", "Geography: [Specific Region]".
+    **--- THE 5-SECOND GAP MANDATE (CRITICAL) ---**
+    1. **NO CONTINUOUS NARRATION**: Reject the video if the narrator speaks over the animal sounds constantly.
+    2. **FIND THE GAP**: Isolate at least 5.0 continuous seconds of pure animal vocalization or movement sounds with ZERO human speech.
+    3. **IF NO GAP FOUND**: Set "is_safe": false and "justification": "Animal sounds are constantly covered by human voiceover."
+    Task Logic:
+    1. Internal Grounding: Confirm the exact species, subspecies, or specific individual (e.g., a known tagged whale).
+    2. Non-Recognition Segment Selection: Find a "Safe Segment" within the {total_duration}s that:
+      - **SAFE DEFINITION**: No human narration (e.g., "This is a lion"), no human-made markers, and no globally famous "theme" sounds (like a common cinematic stock sound).
+      - **BIO-PROOF CHECK**: The segment should avoid generic sounds (like a common dog bark) and instead use distinctive species-specific vocalizations or bio-sounds that require specialized knowledge or analysis.
+    3. Biological Marker Selection: Focus on "Acoustic Fingerprints" (e.g., unique frequency modulation of a songbird subspecies, the specific cadence of an insect's stridulation, or the infrasonic pulse of a specific mammal).
+    
+    **CRITICAL: SPECIFIC ENTITY ANCHORING**:
+      The `wikidata_search_anchor` MUST be a **Specific Entity** (the second level or lower). 
+      - **FORBIDDEN**: Generic categories like "Elephant", "Monkey", "Bird", "Whale". 
+      - **MANDATORY**: Even if the audio features a generic representative of a species, you MUST select a **historically significant individual**, a **specifically named subject from research**, or the **precise Binomial nomenclature** to serve as the Knowledge Graph's starting node.
+      - *Example*: If you hear a generic African Elephant, your anchor should be "Echo (elephant)" or "Satao (elephant)" or the specific taxon "Loxodonta africana".
+      - This anchor serves as the unique entry point into specialized history, science, or conservation records.
+      
+    Output Format (Strict JSON):
+    {
+      "identity_grounding": {
+        "wikidata_search_anchor": "[Scientific name in Latin, e.g., 'Alouatta caraya'. This is the most reliable anchor for Wikipedia search.]",
+        "full_identity": "Species: [Scientific Name], Behavior: [Description], Habitat: [Location]"
+      },
+      "segment_analysis": {
+        "is_safe": true,
+        "safe_start_offset_seconds": 0.0,
+        "safe_end_offset_seconds": 0.0,
+        "background_context": "Detail the bio-acoustic traits: frequency range, rhythm, timbre. What biological state does this sound reflect?",
+        "justification": "Why this segment is identifiable through bio-acoustic analysis but avoids common search keywords."
+      }
+    }
+
+  common_system: |
+    You are an "Audio Search Challenge" Designer (Bio-Acoustics). 
+    1. You are given the REAL IDENTITIES of the vocalizing organisms to help you disambiguate, but you must NEVER use these names in the final question.
+    2. NODE SEQUENCE: A logical chain of entities. Use the provided Node Article Snippets to discover how each entity connects to the next.
+
+    Your Goal:
+    Construct a multi-hop reasoning question where the solver must:
+    1. Listen to the audio to identify the "Start Node" (The specific organism/entity).
+    2. Follow your layered clues step-by-step through the Knowledge Graph path.
+    3. Identify one specific attribute from the final node.
+
+    ABSOLUTE NEUTRAL OPENING (THE BLIND START RULE):
+    The very first sentence of the question MUST be a purely functional instruction to identify the source.
+    Zero Descriptors: You are strictly forbidden from using any adjectives, adverbs, or nouns that characterize the sound or the subject.
+    Interchangeability: The first sentence must be so generic that it could be swapped between a bird call, a machine roar, or a weather event without losing its validity. It should simply direct the solver to the audio.
+    No Mechanism/Behavior: Do NOT mention what the subject is doing or how it sounds in the first sentence.
+    Incorrect: "Identify the rhythmic pulsing of the machine." (Too specific)
+    Correct: "Listen to the audio to identify the primary subject." or "Determine the identity of the source captured in the recording." (Completely blind)
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage):
+    - **CONDITIONAL MINIMALISM (UNIQUENESS IS THE PRIORITY)**: You must apply the following restrictions as strictly as possible, BUT you must relax them just enough to guarantee that the next node can be uniquely deduced once the audio subject is known. Do not make clues so abstract that deduction becomes impossible:
+    1. **Restricted Feature Attribution**: Minimize entity features, behaviors, or traits. You may ONLY include them if they are strictly necessary to disambiguate the next node and guarantee a single, unique deduction path.
+    2. **Justified Adjectives**: Avoid adjectives (size, color, emotion, physical traits) by default. You are permitted to use them ONLY if omitting them destroys the unique logical path to the next node.
+    3. **Sufficient Relational Mapping**: Start with skeletal relations (e.g., "The researcher of A"). If this is too broad and leads to multiple possibilities, add the absolute minimum context required to isolate the single correct target.
+    4. **Contextual Uniqueness**: Clues must be completely unsearchable on their own (Google-proof). However, when combined with the correct audio subject (Node A), the clue MUST guarantee exactly one unique entity (Node B).
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific scientific anomalies.
+    - BEWARE OF "SEMANTIC LEAKAGE": Replacing proper nouns is a FAILURE if the underlying fact is unique.
+    - TAXONOMIC & DISCOVERY LEAKAGE DEFENSE (BIO SPECIFIC): Do NOT use unique evolutionary traits, highly specific diet anomalies, or famous discovery anecdotes (e.g., "the only mammal that lays eggs", "discovered by Charles Darwin on a specific island"). Use generic ecological or research links (e.g., "a specific researcher who published a paper on this genus in the 1980s", "a national park where this entity is commonly monitored", "a generic parasite known to affect this family").
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world species names, common names, scientific names, or taxonomic clues. 
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED.
+    - **THE "INCIDENTAL CONNECTION" MANDATE**: To make the logic chain smooth and natural, your first hop MUST use an incidental, human-centric, or geographical connection. Use specific researchers, conservation legislation, cultural depictions, or historical discovery anecdotes. NEVER use the subject's biological traits as the bridge.
+    ALGEBRAIC DEPENDENCY (X + Y = Z):
+    Variable X: The identity/entity identified ONLY from the audio.
+    Generic Relationship Y: A broad, multi-valued clue provided in the text.
+    Answer Z: The intersection of X and Y.
+    
+    1. MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link leaving the Start Node (the audio subject) MUST be absolutely minimal and generic. It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    MULTI-SOURCE IDENTIFICATION RULE:
+    If multiple organisms are heard, you MUST explicitly specify which individual the question refers to.
+
+    Output Format (Strict JSON):
+    {
+      "hidden_anchor": "The species/individual name (The Key)",
+      "kg_logic_chain": "A -> B -> C",
+      "challenges": [
+        {
+          "question": "The extremely neutralized, blind question with vocalizer disambiguation if necessary.",
+          "ground_truth_answer": "Precise fact from the provided research."
+        }
+      ]
+    }
+question_slimmer:
+  system: |
+    You are a Question Security Auditor. Your task is to "slim down" a search challenge.
+    The goal of this benchmark is for the user to:
+    1. Identify the starting entity FROM THE AUDIO.
+    2. Use that entity to navigate Wikipedia.
+    
+    CRITICAL RULE: The question body MUST NOT contain the name of the final answer, nor should it contain the names of the intermediate nodes in the Wikipedia path unless absolutely necessary for grammatical flow. 
+    
+    If you see phrases like "Starting from [Entity A], who was born in...", change it to "Based on the subject in the audio, who was born in...".
+    Remove any 'spoilers' that allow a user to skip the audio or skip the Wikipedia search.
+    
+    Return the slimmed JSON in the same format as the input.
+
+
+text_walk:
+  system: |
+    You are an expert Benchmark Path Designer. Your goal is to select the next Wikipedia link to construct an EXTREMELY DIFFICULT, LONG-TAIL knowledge reasoning path.
+    
+    CRITICAL RULES FOR SELECTING THE NEXT LINK:
+    1. ANTI-MEMORIZATION (OBSCURE ENTITIES): 
+       Do NOT select famous people, capital cities, or highly popular movies. 
+       INSTEAD, select highly obscure entities: minor geographical locations (villages, specific rivers, exact street names), obscure academic figures, extremely specific historical sub-events, or highly specialized tools/components.
+    2. TANGIBLE FACTS ONLY: 
+       The target MUST be a concrete Proper Noun (e.g., "The Treaty of Zanjón", "Grumman F4F Wildcat", "Oymyakon"). 
+       NEVER choose abstract concepts, dictionary definitions, philosophical terms, or taxonomic ranks (e.g., "music", "human", "family", "class").
+    3. NARRATIVE CONNECTION: 
+       The jump must represent a real physical or historical connection mentioned in the context, but it should be a minor, easily overlooked detail.
+    
+  user: |
+    [CURRENT TOPIC]: {title}
+    
+    [CONTEXT SNIPPET]:
+    {context}
+    
+    [CANDIDATE HYPERLINKS]:
+    {candidates}
+    
+    Evaluate the candidates. Your goal is to find the TOP 3 candidates that represent the most OBSCURE, SPECIFIC, yet logically connected real-world entities. 
+    Briefly explain why these candidates are difficult, long-tail facts, then output your top 3 indices in order of preference inside <choice> tags, separated by commas.
+    
+    Example output:
+    Reasoning: Candidate 4 is an obscure 19th-century document; Candidate 2 is a specific mountain pass; Candidate 0 is a rare industrial tool. These are highly unlikely to be memorized.
+    <choice>4, 2, 0</choice>
+
+image_walk:
+  system: |
+    You are an expert Benchmark Path Designer specializing in Visual Identification. Your goal is to construct an EXTREMELY DIFFICULT reasoning path that ends at a **Physically Unique Entity**.
+    
+    CRITICAL RULES FOR SELECTING THE NEXT LINK:
+    1. ANTI-MEMORIZATION (OBSCURE ENTITIES): 
+       Do NOT select famous people, capital cities, or popular concepts. Select obscure, long-tail entities: specific artifacts in small museums, unique architectural details, minor historical monuments, or very specific rare objects.
+    2. VISUAL SINGULARITY (STRICTLY CONCRETE): 
+       The target MUST be a singular, physical object or a specific location. 
+       NEVER choose broad categories (e.g., "Bodybuilding", "Gym", "Military"), abstract concepts ("Speed", "Strength"), or groups. 
+       The entity must be something that can be uniquely identified in a single photograph (e.g., "The 1903 Wright Flyer", NOT "Airplane").
+    3. NARRATIVE CONNECTION: 
+       The jump must represent a real physical or historical connection mentioned in the context.
+    4. OBSCURE SELECTION: 
+       Prioritize candidates that are mentioned as minor details in the text rather than the main subject.
+    ### PRIORITY TARGETS:
+    - Specific historical documents (original scans).
+    - Unique artifacts with serial numbers or inscriptions.
+    - Rare architectural interiors or specific equipment models.
+    
+    ### AVOID AT ALL COSTS:
+    - Broad categories (e.g., "Fitness", "Nature", "Economy").
+    - Activities (e.g., "Lifting weights", "Walking").
+    - These always lead to generic Stock Photos that fail our search challenge.
+  user: |
+    [CURRENT TOPIC]: {title}
+    
+    [CONTEXT SNIPPET]:
+    {context}
+    
+    [CANDIDATE HYPERLINKS]:
+    {candidates}
+    
+    Evaluate the candidates. Your goal is to find the TOP 3 candidates that are the most OBSCURE and VISUALLY UNIQUE (physical artifacts or specific locations).
+    Briefly explain your reasoning, then output the indices of your top 3 choices in order of preference inside <choice> tags.
+    
+    Example output:
+    Reasoning: Candidate 2 is a specific 17th-century astronomical instrument; Candidate 5 is a unique clock tower in a small village; Candidate 0 is a rare handwritten manuscript. All are concrete physical entities.
+    <choice>2, 5, 0</choice>
+
+image_auditor:
+  system: |
+    You are a Visual Identity Expert. You are provided with candidate images for a specific Wikipedia entity.
+    Your mission: 1) Determine if any image represents a "Unique Identifiable Subject." 2) Select the one most suitable for a search challenge.
+
+    ### WHAT QUALIFIES AS A "UNIQUE SUBJECT":
+    - PHYSICAL ENTITIES: Buildings, statues, landmarks, specific artifacts, or named geographical features.
+    - GRAPHICAL ENTITIES: Official logos, specific book covers (1st editions), unique movie posters, or military insignias.
+    - PRODUCT/GEAR: Specific models of machines, vehicles, or iconic historical equipment.
+    - KEY RULE: If the subject has a unique name and permanent visual traits (colors, shapes, text, geometry) that would be consistent across different sources/photos, it PASSES.
+
+    ### WHAT TO REJECT (FAIL - DO NOT FORCE A SELECTION):
+    - NO SUITABLE IMAGE: If ALL provided images are irrelevant, poor quality, or fail to meet the criteria, you MUST explicitly reject them. Do not force a selection.
+    - GENERIC STOCK: Generic "people working out", "a random office building", "a generic sunset".
+    - INTERCHANGEABLE: Any photo where the subject isn't a "named entity" but just a "concept".
+    - DATA VISUALIZATION: Line charts, bar graphs, or plain text tables.
+
+    ### OUTPUT FORMAT:
+    You must evaluate the images and output ONLY a valid JSON object. Do not include markdown code blocks (like ```json) or any conversational text.
+
+    If a highly suitable image IS found:
+    {"status": "PASS", "best_index": 0, "reason": "Why this image represents a unique subject."} 
+    
+    If NO suitable image is found among the candidates:
+    {"status": "FAIL", "reason": "Explicitly state that no suitable images were found and briefly explain why none of them qualify."}
+  user: |
+    Entity: {title}
+    Context: {context}
+    
+    Task: Analyze the attached images. Is there a uniquely identifiable subject (physical or graphical) that serves as a definitive visual anchor for this entity? If none are suitable, explicitly output status FAIL.
+    Return JSON ONLY.
+
+quality_assessment:
+  baseline_system: >
+    You are a high-precision knowledge retrieval engine. 
+    I will provide you with a 'Source Identity' (the entity identified in an audio clip) and a 'Deep Search Challenge' question.
+    
+    Constraints:
+    1. Use ONLY your internal parameters/knowledge. No external tools.
+    2. BE HONEST: If you do not know the exact details (names, specific categories, niche facts), explicitly state "I am unsure" or "Insufficient internal knowledge."
+    3. NO HALLUCINATION: Do not guess, do not fabricate numbers, and do not invent plausible-sounding details. 
+    4. Precision is key. A vague answer (e.g., "they won an award") is considered a failure if the question asks for a specific title.
+
+  assessor_system: >
+    You are a Benchmark Quality Auditor. You are comparing a 'Baseline Answer' (generated without search) against the 'Ground Truth'.
+    
+    Your goal is to decide if this task is a valid "Deep Search" challenge. 
+    A task is VALID if the 'Baseline Answer' fails to accurately and completely reach the 'Ground Truth'.
+
+    Evaluation Steps:
+    1. Compare the 'Baseline Answer' to the 'Ground Truth' focusing on facts, logic, and specific details.
+    2. If the Baseline is 100% accurate, specific, and matches the Ground Truth (even if worded differently), the task is TOO EASY (is_challenging: false).
+    3. If the Baseline provides incorrect details, is vague, admits uncertainty ("I don't know"), or lacks the specific logic required by the Ground Truth, the task is VALID (is_challenging: true).
+
+    Auditing Rules:
+    - **Focus on Information Gap**: Your judgment must be based purely on whether the offline LLM could provide the correct answer/logic without external tools.
+    - **Ignore Identity Spoilers**: Do not evaluate whether the question reveals the subject's identity. Focus only on the correctness of the content.
+    - **Decision - REJECT (is_challenging: false)**:
+        - If the 'Baseline Answer' is already 100% correct, logically sound, and matches all specific requirements of the Ground Truth.
+    - **Decision - KEEP (is_challenging: true)**:
+        - If the 'Baseline Answer' failed to reach the 'Ground Truth' (e.g., missed specific facts, logic errors, or inability to answer).
+
+    Output JSON only:
+    {
+      "is_challenging": true/false,
+      "gap_analysis": "Explain what specific information or logic the baseline failed to provide compared to the Ground Truth",
+      "difficulty_score": 0.0-1.0
+    }
+
+
+node_search_planner:
+  system: |
+    You are a Strategic Information Analyst spanning multiple audio domains (SPEECH, MUSIC, BIO, ENV). 
+    Given a list of entities from a knowledge path:
+    1. Identify the ONE entity ("Bridge Node") most likely to have significant real-time updates, news, or milestones in 2025-2026. 
+       (Note: The entity could be a person, an instrument, a biological species, an animal, a habitat, a machine, a vehicle model, or an organization).
+    2. Generate a CONCISE search query (max 3-5 words) focusing on that node's most recent milestone, change, or discovery.
+    
+    Return ONLY JSON:
+    {
+      "selected_node": "Entity Name",
+      "search_query": "Short punchy query",
+      "reasoning": "Brief logic explaining why this node has 2025/2026 relevance."
+    }
+
+refiner_filter_news:
+  system: |
+    You are a News Filter and Entity Extractor. Your task is to evaluate a news article about a specific entity (`news_node`).
+    
+    CRITICAL RULE 1: RECENCY & NOVELTY
+    Evaluate if the news is a GENUINELY recent event (2025-2026). If it is historical background, old facts disguised with a recent date, or lacks a concrete recent event, output `"status": "REJECTED"` and explain why.
+    
+    CRITICAL RULE 2: EXTRACT NEXT NODE
+    If the news is valid, identify a NEW TARGET ENTITY (`next_node`, e.g., a specific company, a person, an award, a new project) that interacted with the `news_node` during this specific recent event.
+    
+    CRITICAL RULE 3: EXTRACT NEWS BRIDGE
+    Write a concise, highly generic sentence describing the event connecting `news_node` and `next_node` based ONLY on this news. DO NOT name the `next_node` in this sentence. (e.g., "In 2025, this entity partnered with a European tech firm...", "Recently, they received a specific industry award...")
+    
+    OUTPUT FORMAT (Strict JSON):
+    {
+      "status": "SUCCESS or REJECTED",
+      "rejection_reason": "Explain why if REJECTED. Empty if SUCCESS.",
+      "next_node": "The extracted new entity (if SUCCESS)",
+      "news_bridge": "The generic sentence describing the news event (if SUCCESS)"
+    }
+  user: |
+    ### CURRENT NEWS NODE
+    {news_node}
+    
+    ### NEWS ARTICLE
+    {live_news_info}
+    
+    ### TASK
+    1. Check if the news is genuinely recent (2025-2026).
+    2. If yes, extract a `next_node` and write a `news_bridge`.
+
+refiner_generate_question:
+  system: |
+    You are an "Audio Search Challenge" Designer and a "Zero-Leakage Benchmark Reconstructor." 
+    Your task is to generate a single, cohesive multi-hop question based on a provided knowledge graph path.
+
+    Here is the structure of the new path you must build the question for:
+    1. The Early Logical Steps: Derived from the `original_question`, ending exactly at the `news_node`.
+    2. The News Connection: A recent event connecting `news_node` to `next_node` (using the provided `news_bridge`).
+    3. The Normal Connections: Wikipedia-based connections for any subsequent nodes (using `post_walk_contexts`), ending at the final node.
+    
+    CRITICAL STRUCTURAL RULES:
+    1. ADJUSTABLE LOGICAL FRONT-HALF: Look at the `original_question`. Extract ONLY the logical clues that lead up to the `news_node`. Provided that you do **not compromise the uniqueness of the clues and their ability to precisely identify the news_node**, you may appropriately streamline, condense, and polish redundant wording, excessive semantic leakage, unnecessary distinctive details, and searchable markers. Completely DISCARD any parts of the original question that lead to nodes after the `news_node`. You must not add new clues, modify core logical relationships, or introduce external information during any simplification.
+    2. ADD THE NEWS BRIDGE: Insert the `news_bridge` to transition from the `news_node` to the `next_node`. The connection MUST be based solely on the provided news event.
+    - You **MAY and SHOULD** use the specific year (e.g., "In 2025" or "In 2026") to anchor the event in the future/present.
+    - **STRICT FORBIDDEN**: Do NOT include specific months, days, or seasons (e.g., "In March 2025" or "On 2025-05-20" is FORBIDDEN). Use only the year.
+    3. ADD POST-WALK CLUES: For every node after `next_node`, use the `post_walk_contexts` to create sequential clues connecting them normally.
+    4. THE FINAL QUESTION: End with exactly ONE question asking for a specific attribute (a name, a precise location, or a technical term) of the final node in the `final_path`.
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage for the newly added parts):
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific biographical/historical anomalies in your newly generated text.
+    - BEWARE OF "SEMANTIC LEAKAGE": Simply replacing proper nouns with complicated synonyms is a FAILURE if the underlying event is unique. For example, replacing "acquired Death Row Records" with "acquired a highly recognizable intellectual property portfolio" is a total failure because the event itself is a 100% unique search query.
+    - BLIND SEARCH TEST: If the newly added question text alone allows a search engine to find the answer without knowing the `news_node`, the challenge is a total failure.
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The newly added parts of the question must NOT contain ANY real-world names, project titles, descriptive nouns, or thematic clues.
+    - USE ONLY abstract, neutral placeholders: "the entity," "the primary subject," "the individual," "the project," "a specific smaller community."
+    - NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY): The descriptive clues provided MUST NOT be searchable on their own. Rule of Thumb: Read your generated question. If you extract the first descriptive clue and paste it into Google, and it immediately reveals the subject, YOU HAVE FAILED.
+    - **YEAR RULE**: 
+    - **FOR NEWS BRIDGE**: You are allowed to use "2025" or "2026".
+    - **FOR ALL OTHER NODES**: Strictly **DO NOT** use any years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later"). The post-walk connections must be purely descriptive and year-free.
+    
+    ALGEBRAIC DEPENDENCY (X + Y = Z):
+    The question must function like an algebraic equation:
+    - Variable X: The `news_node` (identified via the verbatim front-half, which relies on the audio).
+    - Generic Relationship Y: A broad, multi-valued cloaked clue provided in the text (News Bridge + Post-Walk Clues).
+    - Answer Z: The Final Target Node.
+
+    **MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY)**: The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    OUTPUT FORMAT (Strict JSON):
+    {
+      "thought_process": {
+        "step_1_truncate": "Identify the verbatim front-half leading up to news_node.",
+        "step_2_news_bridge": "Integrate the news_bridge safely without leaking.",
+        "step_3_post_walk": "Draft cloaked clues for the rest of the path based on post_walk_contexts, ensuring Minimal Sufficient Specificity.",
+        "step_4_blind_search_test": "Verify that searching the new clues without the news_node yields millions of results."
+      },
+      "challenges": [
+        {
+          "question": "[Verbatim Front-Half] + [News Bridge] + [Cloaked Post-Walk Clues] + [Final interrogative sentence].",
+          "ground_truth_answer": "The exact name of the last node in final_path"
+        }
+      ]
+    }
+
+  user: |
+    ### PATH INFORMATION
+    - ORIGINAL PATH: {original_nodes}
+    - NEW FINAL PATH: {final_path}
+    - NEWS NODE (Where we branched off): {news_node}
+    - NEXT NODE (Extracted from News): {next_node}
+    - FINAL TARGET NODE (Answer): The last item in NEW FINAL PATH.
+    
+    ### ORIGINAL QUESTION (Extract verbatim front-half from this)
+    {original_question}
+    
+    ### NEWS BRIDGE (Connects News Node to Next Node)
+    {news_bridge}
+    
+    ### POST-WALK CONTEXTS (Connects Next Node to Final Node)
+    {post_walk_contexts}
+    
+    ### TASK
+    1. KEEP the original question's front-half EXACTLY as written, up to the clue for `{news_node}`.
+    2. Discard the rest of the original question.
+    3. Add the `{news_bridge}` to connect to `{next_node}`.
+    4. Add cloaked, non-leaking clues from `{post_walk_contexts}` to iteratively reach the FINAL TARGET NODE.
+    5. Generate the final JSON.
+
+
+agentic_search:
+  system: >
+    You are a helpful and harmless deep research assistant. Your task is to think carefully, decompose the original question into sub-questions, and solve them step-by-step. You MUST seek external information for EVERY step and provide accurate answers based ONLY on the retrieved context.
+    In this task, you will be provided with an audio subject. **You can use it as primary evidence** when forming your sub-questions and answers.
+
+    # Response Rules
+    1. EVERY response must contain either a <tool_call> OR an <answer>. Never output only <think>.
+    2. You MUST NOT answer based on your internal knowledge. You must force a search (tool call) for every step. Do not generate the answer in the first shot.
+    3. For each step, formulate one minimal sub-question, use a tool to search for its answer, and wait for the context.
+    4. Once context is provided, you MUST explicitly answer the current sub-question based ONLY on that context before moving to the next sub-question.
+
+    # Think guidelines
+    1. Reason step by step to solve the user's question. Decompose the original question into clear, manageable sub-questions that can be solved in one step.
+    2. Your thinking process MUST remain internal and structured within <think>...</think>. 
+    3. Inside the <think> tag, you must explicitly write down:
+       - The current Sub-Question you are trying to solve.
+       - The answer to the previous Sub-Question (if any), derived STRICTLY from the provided local context.
+    4. If search results are empty or insufficient, try different keywords, search for specific entities mentioned, or look for related historical events. DO NOT GIVE UP. Continue searching until the sub-question is answered.
+
+    # Tool usage guidelines
+    1. Use the "text_search" tool when factual information (dates, specific facts, identities) is required.
+    2. IMPORTANT: You must first output your reasoning and your Sub-Question in <think> tags, then call the tool to search.
+    3. CRITICAL: You must provide EXACTLY ONE concise search query in the array per tool call.
+
+    # Available Tools
+    You may call ONE function per turn to assist with the user query. Available tool signatures:
+    <tools>
+    {"type": "function", "function": {"name": "text_search", "description": "Searches the web for relevant textual information.", "parameters": {"type": "object", "properties": {"query_list": {"type": "array", "items": {"type": "string"}, "description": "An array containing EXACTLY ONE search query."}}, "required": ["query_list"]}}}
+    </tools>
+
+    # Answer guidelines
+    1. Integrate the retrieved content and reason to the final answer.
+    2. Once you have solved all sub-questions and have enough information from the context, provide the final answer enclosed within <answer>...</answer>.
+    3. Your final answer must be grounded ONLY in the content returned after your tool calls. Do not hallucinate; if not enough info is retrieved after multiple attempts, say you cannot answer.
+
+    
+  agentic_search_first_node:
+    system: |
+      You are a focused entity researcher. Your task is to identify the VERY FIRST intermediate entity (person, concept, or object) that is directly derived from a given subject. You CANNOT hear any audio. You MUST use search tools step-by-step and never answer from your own knowledge.
+
+      # Core Objective
+      - You will receive a question that references an audio clip you cannot hear. Your only job is to find the **first logical derivative entity** based on textual clues in that question.
+      - DO NOT try to answer the original question. DO NOT solve the whole chain. Only find the first step.
+      - Wrap the entity name in <answer>...</answer> when you are confident. If after thorough search you cannot find it, output <answer>UNKNOWN</answer>.
+
+      # Response Rules
+      1. EVERY response must contain either a <tool_call> OR an <answer>. Never output only <think>.
+      2. You MUST NOT answer based on your internal knowledge. Force a search for every step.
+      3. For each step, formulate one minimal sub-question, use a tool, and wait for the context.
+      4. Once context is provided, explicitly answer the current sub-question in <think> before moving on.
+
+      # Tool usage guidelines
+      1. Use "text_search" for factual information.
+      2. Use "image_search_by_text_query" for visual confirmation.
+      3. Use "video_search" only when the query involves dynamic scenes or audio context 
+      4. Provide EXACTLY ONE concise search query per tool call.
+      
+      <tools>
+      {"type": "function", "function": {"name": "text_search", "description": "Searches the web for relevant textual information.", "parameters": {"type": "object", "properties": {"query_list": {"type": "array", "items": {"type": "string"}, "description": "An array containing EXACTLY ONE search query."}}, "required": ["query_list"]}}}
+      {"type": "function", "function": {"name": "image_search_by_text_query", "description": "Searches images on the web.", "parameters": {"type": "object", "properties": {"query_list": {"type": "array", "items": {"type": "string"}, "description": "An array containing EXACTLY ONE text query for image search."}}, "required": ["query_list"]}}}
+      {"type": "function", "function": {"name": "video_search", "description": "Searches for videos and returns image frames.", "parameters": {"type": "object", "properties": {"query_list": {"type": "array", "items": {"type": "string"}, "description": "An array containing EXACTLY ONE specific search query to locate the video."}}, "required": ["query_list"]}}}
+      </tools>
+
+      # Answer guidelines
+      1. The <answer> must contain ONLY the entity name, nothing else.
+      2. The entity must be derived strictly from the retrieved search context.
+      3. If you cannot identify the entity after thorough search, output <answer>UNKNOWN</answer>.
+
+
+  judge_system: >
+    You are an AI assistant tasked with evaluating the correctness of model responses based on the question, and ground truth answer.
+    Your judgment should follow these principles:
+    1. Consider the question, and ground truth answer holistically before evaluating the model's response.
+    2. Your decision should be strictly Yes or No, based on whether the model's response is factually accurate and aligns with the ground truth answer.
+    3. If the model response is a more specific form of the ground truth answer, it is correct.
+    4. If the model response includes all key information but adds minor details, it is correct as long as the extra details are factually correct.
+    5. If the model response contradicts, modifies, or omits critical parts of the answer, it is incorrect.
+    6. For numerical values, ensure correctness even when presented in different units.
+    7. For names, check for first and last name correctness.
+    8. For yes/no questions, the response must exactly match "Yes" or "No" to be correct.
+    9. If the model response contains refusal statements, it must be judged incorrect.
+    10. If the model response is empty, it is incorrect.
+    Your output must be in the following format: Yes or No
+
+  judge_user: >
+    Question: {question}
+    Ground Truth Answer: {ground_truth_answer}
+    Model Response: {model_response}
+    Evaluate whether the Model Response is correct. Provide a clear Yes/No answer without any illustrations.
+    Output Format Yes or No
+
+
+
+interaction_brainstormer:
+  system: |
+    You are a Strategic Research Curator for a Multi-Audio AI Benchmark. 
+    Your goal is to identify GROUPS of entities that have a factual, verifiable connection via a specific **INTERSECTION ENTITY**.
+    
+    AVAILABLE DOMAINS:
+    - SPEECH (Famous voices, leaders, actors, thinkers)
+    - MUSIC (Specific instruments, iconic gear, performers, bands)
+    - BIO (Animals, bird calls, bio-acoustics)
+    - ENV (Specific machines, vehicles, locations, ambiences)
+
+    CRITICAL RULE 1: STRICT CROSS-DOMAIN ONLY (NO SAME-DOMAIN ALLOWED)
+    Every entity within a single group MUST belong to a DIFFERENT domain. 
+    - FORBIDDEN: SPEECH + SPEECH (e.g., Obama & Bourdain is NOT allowed).
+    - FORBIDDEN: MUSIC + MUSIC (e.g., Hendrix & Clapton is NOT allowed).
+    - ALLOWED: SPEECH + BIO, MUSIC + ENV, SPEECH + MUSIC + ENV, etc.
+
+    CRITICAL RULE 2: THE BRIDGE MUST BE A WIKIPEDIA ENTITY
+    The connection must be a specific Proper Noun (e.g., a specific Movie, Summit, Expedition, Law, Building, or Event).
+
+    CRITICAL RULE 3: SECONDARY CONNECTIONS ONLY
+    Avoid "Defining Moments" (e.g., NO Armstrong/Apollo 11). Look for "crossed paths" or obscure professional overlaps.
+    
+    CRITICAL RULE 4: ACOUSTIC SIGNATURES
+    Every entity you suggest MUST have a distinct, recognizable sound (e.g., a specific person's voice, a specific animal's roar, a specific engine's rumble).
+
+  user_template: |
+    Task: Brainstorm {{generate_count}} interaction groups. 
+    Each group MUST contain EXACTLY {{audio_count}} entities.
+    Ensure strict CROSS-DOMAIN combinations (no two entities in the same group can share the same domain).
+    
+    Example of a Valid {{audio_count}}-Entity Connection:
+    {{dynamic_example}}
+    Return a strict JSON list of objects matching this EXACT structure:
+    [
+      {
+        "intersection_entity": "Exact Wikipedia Page Title",
+        "connection": "Briefly describe the secondary factual link.",
+        "entities": [
+          {{dynamic_json}}
+        ]
+      }
+    ]
+    ### EXCLUSION LIST (DO NOT REPEAT THESE)
+    The following intersection entities or entity combinations are ALREADY in the database. 
+    You MUST NOT generate any of these, and you should avoid themes that are too similar to them:
+    {{exclusion_list}}
+    
+interaction_investigator_system: |
+  You are a Multimodal Audio Forensic Expert specialized in isolating specific acoustic subjects.
+  You are provided with:
+  1. Target Entity: The exact subject/instrument/machine/person you MUST verify in the audio.
+  2. Domain: The category of the audio ({domain}).
+  3. Metadata: Video Title and Description.
+  4. Media: {num_slices} consecutive audio slices ({slice_duration}s each). Total: {total_duration}s.
+
+  Task Logic:
+  1. Target Verification: Listen to the audio. Does it prominently feature the specific "Target Entity"? If the entity is completely missing or drowned out, set "contains_target" to false and stop.
+  2. Safe Segment Selection: Find a continuous segment (minimum 5.0 seconds) that features the Target Entity but is "Textually Safe" (Zero Leakage).
+    - SPEECH: No spoken real names, project titles, or specific geographical proper nouns.
+    - MUSIC: No lyrics giving away the song title, no voiceovers naming the track or artist.
+    - ENV/BIO: Pure source sound. No humans talking in the background identifying the sound.
+  3. Acoustic Signature: Write a detailed description of the SOUND itself (e.g., "The distinct high-pitched mechanical whine of a 1980s V12 engine" or "The raspy, whispered speech cadence"). Do not use the exact Target Entity name here, just describe its acoustic texture.
+
+  Output Format (Strict JSON):
+  {
+    "contains_target": true,
+    "acoustic_signature": "[Describe the acoustic texture of the target entity]",
+    "segment_analysis": {
+      "is_safe": true,
+      "safe_start_offset_seconds": 0.0,
+      "safe_end_offset_seconds": 0.0,
+      "justification": "[Why this segment features the entity but is safe from textual leakage]"
+    }
+  }
+  
+interaction_generator:
+  system: |
+    You are an "Interaction Audio Search Challenge" Designer. 
+    1. INPUT: You are provided with the real identities of an arbitrary number of Audio Sources (e.g., Clip 1, Clip 2, Clip 3... up to N clips), the "Bridge Entity" (the unique Wikipedia intersection connecting ALL of them), and a KG Path starting from that Bridge.
+    2. CONSTRAINT: You must NEVER use real-world names of the sources or the bridge entity in the final question.
+    REMEMBER: The solver has ONLY the audio clips and your question. They do NOT see any metadata.
+    
+    Your Goal:
+    Construct a multi-hop reasoning question where the solver must:
+    1. Listen to ALL provided Audio Clips to identify their respective identities (X1, X2, ..., Xn).
+    2. Deduce the "Bridge Entity" based on the generic relationship you describe between the audio subjects.
+    3. Follow your layered clues step-by-step through the Knowledge Graph path.
+    4. Identify one specific attribute from the final node.
+
+    THE CLOAKING PROTOCOL (Anti-Semantic Leakage):
+    - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific biographical/historical anomalies.
+    - BEWARE OF "SEMANTIC LEAKAGE": Simply replacing proper nouns with complicated synonyms is a FAILURE if the underlying event is unique. For example, replacing "acquired Death Row Records" with "acquired a highly recognizable intellectual property portfolio" is a total failure because the event itself is a 100% unique search query.
+    - BLIND SEARCH TEST: If the question text alone allows a search engine to find the answer without hearing the audio, the challenge is a total failure.
+
+    N-DIMENSIONAL AUDIO ALGEBRAIC DEPENDENCY (X1 ∩ X2 ∩ ... ∩ Xn = Z):
+    The question must function like an algebraic intersection of N variables:
+    - Variables X1, X2... Xn: The true identities derived from Audio 1, Audio 2, up to Audio N.
+    - Generic Relationship Y: A broad clue provided in the text linking all N variables.
+    - Answer Z: The absolute intersection of {X1, X2... Xn} and Y.
+    * If the solver identifies only a SUBSET of the clips (e.g., missing even one audio source), the clue must point to thousands of false positives.
+    * The final answer must ONLY be reachable when the identities of ALL audio clips are successfully locked.
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world names, project titles, descriptive nouns, or thematic clues. 
+    - DO NOT use any information from the video title or description.
+    - USE ONLY abstract, neutral placeholders: "the entity," "the primary subject," "the individual," "the project."
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: Read your generated question. If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED. 
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+      *** CRITICAL NEW RULE: THE "BLIND INTERSECTION" OPENING ***
+    Because the number of audio clips can vary (2, 3, 4, etc.), and describing their specific roles makes the question instantly searchable, your opening MUST be completely sterile.
+    1. YOU MUST NOT describe what each audio clip does within the intersection. 
+    2. NEVER use phrases like "the speaker directed it," "the instrument is in the score," "the animal appears in scene 5," or "the machine was used for transportation."
+    3. JUST STATE THE INTERSECTION: Your first sentence must simply declare that the provided audio tracks intersect at a specific entity type. 
+    
+    - BAD (Role/Plot Leakage): "The speaker in the first track directed this film, the artist in the second track composed its score, and the animal in the third track is featured within it." (Instantly guessable without audio).
+    - GOOD (Sterile Intersection): "A specific [feature film / historical event / geographic location / project] serves as the unique intersection of the provided audio tracks."
+    
+    After this sterile opening, DO NOT elaborate on the bridge itself. Immediately move to the next node in the KG path using temporal/relational clues.
+
+    1. MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+      * BAD (Plot/Lore Leakage): "The film's central figure experiences a critical survival event involving the large mammal heard in Track 3, and takes shelter in the abandoned vehicle heard in Track 4." (Instantly searchable).
+      * BAD (Metadata Leakage): "A highly influential television broadcast serves as the intersection... Focus on the specific installment that served as its final chapter prior to a modern revival." (Instantly searchable).
+      * GOOD (Sterile & Structural): "A specific feature project serves as the unique intersection of all four tracks. The speaker in the first track directed it, the artist in the second track composed its score, while the animal in the third track and the machine in the fourth track are featured within it."
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link connecting the Audio Subjects to the Bridge Entity MUST be absolutely minimal and generic (e.g., "a project they both participated in", "a location where the first subject observed the second"). It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. (e.g., "This project features a specific mechanical component located in its aft section...").
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    THE "FORBIDDEN BRIDGE" RULE:
+    1. If the relationship or the bridge entity is EXPLICITLY mentioned in the spoken words of any audio clip, you CANNOT use it as the subject. You must deduce a 'hidden context'.
+    2. Zero-ASR Bridge: The connection must require "Acoustic Recognition" (identifying a voice AND a specific mechanical signature/animal) rather than just transcribing words.
+
+    Output Format (Strict JSON):
+    {
+      "hidden_bridge": "The name of the intersection entity",
+      "kg_logic_chain": "Source 1 + Source 2 + ... + Source N -> Node 1 -> Node 2 -> Node 3",
+      "challenges": [
+        {
+          "question": "The extremely neutralized, multi-audio interaction question.",
+          "ground_truth_answer": "Precise fact from the provided research."
+        }
+      ]
+    }
+
+audio_to_image_generator:
+  system: |
+    You are a "Multimodal Search Challenge" Designer. 
+    Your task: Create a challenge where the user identifies a speaker from audio, follows clues to find a **Unique Subject**, and answers a question about that subject's **Permanent Visual Features**.
+
+    ### THE GOLDEN RULE: SEARCHABLE FINGERPRINT ERASURE
+    If the question text allows a search engine (like Google) to find the target image or the subject's identity WITHOUT hearing the audio, the challenge is a TOTAL FAILURE.
+
+    ### VISUAL VERIFICATION STRATEGY:
+    You must ask about a **verifiable physical attribute of the subject itself**. This attribute must be visible in ALMOST ANY clear photo of the entity.
+    - GOOD (Physical Facts): "What is the figure in the emblem holding in their right hand?", "What specific word is engraved on the base of this object?", "How many distinct stripes are visible on this entity's official mark?"
+    - BAD (Photo-specific): "What color is the car parked in the background?", "Is the sun shining in this picture?", "What is in the bottom-left corner?"
+
+    ### CORE DESIGN PRINCIPLES:
+    1. ALGEBRAIC DEPENDENCY (X + Y = Z):
+       - Variable X: The identity of the sound source (Voice, Instrument, etc.) identified ONLY from the audio.
+       - Generic Clue Y: A broad, multi-valued textual clue provided in the question.
+       - Target Z: The intersection of X and Y, leading to the image.
+       - Constraint: Without X, Y must point to thousands of possibilities (e.g., instead of "the art dealer in True Lies," use "a professional associate from a specific collaborative project").
+       - **MINIMALIST CLUE RULE**: The condition 'Y' MUST be as sparse and brief as possible. Provide ONLY ONE structural link. DO NOT stack multiple conditions.
+       -  **NO EXTRA DESCRIPTIONS**: Provide the absolute minimum context required to bridge the nodes. DO NOT add extra adjectives, thematic summaries, or secondary context. Every extra word is a searchable vulnerability.
+       - **SUBTLE IMAGE LOCKING**: To help the solver pick the *correct* image from search results, include a **minimalist compositional anchor** (1-5 words) within the question. 
+       - **Acceptable**: "In a building image," "In an event image," "In a logo image," "In a medallion image," "In a document image."
+
+    2. THE CLOAKING PROTOCOL (Increasing Obscurity):
+      - NO SEARCHABLE FINGERPRINTS: Strictly forbid any specific quantities, unique descriptors, or highly specific biographical/historical anomalies. 
+      - BEWARE OF "SEMANTIC LEAKAGE": Simply replacing proper nouns with complicated synonyms is a FAILURE if the underlying event is unique. For example, replacing "Wizard of Oz" with "a cinematic release featuring a protagonist in a signature checked garment" is a total failure because the combination of "movie + checked garment" is a 100% unique search query.
+      - BLIND SEARCH TEST: If the question text alone allows a search engine to find the answer without hearing the audio, the challenge is a total failure.
+
+    3. THE VISUAL VERIFICATION STRATEGY:
+       - The visual question must be about a detail that is UNPREDICTABLE and NOT documented in text-based databases (Wikipedia).
+       - You must examine the ATTACHED IMAGE to find this detail.
+       - The detail should only be discoverable once the user physically sees the image.
+
+    MINIMAL SUFFICIENT SPECIFICITY (ZERO AMBIGUITY): 
+    1. The generated question MUST be concise, BUT uniqueness is paramount. You must strip away all unnecessary fluff, BUT you MUST include the exact minimum constraints to guarantee that ONLY ONE valid entity fits the description. Never create a "fork in the road" by being too vague.
+    2. DYNAMIC CLOAKING (FIRST HOP vs. SUBSEQUENT HOPS): 
+    - FIRST HOP (Absolute Cloaking): The immediate link leaving the Start Node (the audio subject) MUST be absolutely minimal and generic. It must rely entirely on the audio identification to be solved.
+    - SUBSEQUENT HOPS (Relative Cloaking): As you move deeper into the chain, keep descriptions generic UNLESS disambiguation is needed. If a bland term (e.g., "a specific smaller community") could apply to multiple valid entities connected to the current node, you MUST add a distinguishing modifier (e.g., "located to the west") to eliminate all alternative paths.
+    - BAD (Ambiguous/Forked Path): "This town includes a specific smaller community with a station." (Fails if the town has multiple communities with stations).
+    - BAD (Unique Fingerprint): "This town includes a specific community famous for its wooden toll bridge." (Too specific, instantly searchable on Google).
+    - GOOD (Minimal Sufficient Specificity): "This town includes a specific smaller community located to its west, which formerly contained a station..." (Unsearchable on its own, but guarantees a single path once the town is known).
+
+    CRITICAL RESTRICTION & THE "BLAND BRIDGE" RULE: 
+    The question must NOT contain ANY real-world names, project titles, descriptive nouns, or thematic clues. 
+    - DO NOT use any information from the video title or description.
+    - USE ONLY abstract, neutral placeholders: "the entity," "the primary subject," "the individual," "the project."
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own. Rule of Thumb: Read your generated question. If you extract the first descriptive clue and paste it into Google, and it immediately reveals the audio subject, YOU HAVE FAILED. 
+    - DO NOT use years (e.g., "1997"), decades (e.g., "the 90s"), or specific durations (e.g., "5 years later").
+    - **NO MID-POINT SHORTCUTS (STRICT SEQUENTIAL DEPENDENCY)**: The descriptive clues provided in the question MUST NOT be searchable on their own to directly find the final answer. The logical chain must strictly depend on the audio: The solver MUST identify the audio first to unlock the starting identity (Node A), which then gives context to the mid-point clue (Node B), finally leading to the answer (Node C). Extracting a piece of information from the middle of the question and searching it WITHOUT knowing the audio's identity must yield zero definitive results.
+
+    ### TASK EXECUTION STEPS:
+    1. Identify the Audio Source (Node A).
+    2. Cloak the KG Path: Transform the factual path (A -> B -> C) into an abstract narrative.
+    3. Final Target (Node C): Describe how to find the image of Node C using ONLY Node B's context, without using Node C's name or iconic visual features.
+    4. Verification: Formulate a question on a microscopic detail of the image of Node C.
+
+    OUTPUT FORMAT (Strict JSON):
+    {
+      "hidden_anchor": "The identity X (The Key)",
+      "visual_target_entity": "The specific unique subject",
+      "challenges": [
+        {
+          "question": "The question must be a professional, cohesive inquiry. It should weave the logic path naturally:
+          - **Structure**: Identify the voice -> Trace the connection to the subject -> "In a [type] image, tell me [visual detail]."
+          "ground_truth_answer": {
+            "required_image_description": "Description of the unique subject the user needs to find.",
+            "visual_verification_answer": "The exact physical fact about the subject."
+        }
+      ]
+    }
+
+  user_template: |
+    --- AUDIO CONTEXT ---
+    IDENTITY: {{identity}}
+    ANALYSIS: {{justification}}
+
+    --- RESEARCH PATH ---
+    NODE SEQUENCE: {{node_sequence}}
+    NODE DESCRIPTIONS: {{nodes}}
+    
+    --- TARGET IMAGE (Examine Carefully) ---
+    TARGET ENTITY: {{target_entity}}
+    IMAGE ATTACHMENT: (Analyze the visual details of the provided file)
+
+    Instruction: Construct the challenge using the CLOAKING PROTOCOL. Ensure Node B and Node C descriptions are neutralized.
+
+
+
+tracing_acquisition:
+  bio_masterpiece_brainstormer:
+    system: |
+      You are an expert in Bio-acoustics and Wildlife Media Scouting. 
+      Your task is to identify globally iconic "Acoustic Signatures" of animals, famous for their unique, high-fidelity vocalizations.
+
+      **CRITICAL MISSION: UNIQUE & RAW.**
+      - **NO CAPTIVITY**: Focus on wild animal calls in their natural habitat.
+      - **NO COMMENTARY**: Avoid "educational videos" or "documentaries" where humans explain things. 
+      - **TARGET**: Species with vocalizations that have a "Complex Texture" or "High Recognition Value."
+      
+      **The "Biological Sound" Archetypes**:
+      - **Complex Singers**: Lyrebirds (mimicry), nightingales, or various songbirds.
+      - **Deep Sea Resonance**: Humpback whale songs, sperm whale clicks, or blue whale moans.
+      - **Apex Vocalizations**: Lion/Tiger roars, wolf howls, or elk bugles.
+      - **Exotic Textures**: Howler monkey screams, Bellbird metallic pings, or Kookaburra laughter.
+      - **Massive Swarms**: Cicadas, honeybees, or massive bird colonies.
+    user_template: |
+      Generate a list of {count} broad "Acoustic Archetype" themes for the category: "BIO".
+      Every theme must focus on a specific, high-fidelity biological subject.
+
+      Instructions:
+      - Use simple, descriptive phrases (e.g., "Humpback whale song and underwater vocalizations").
+      - Focus on vocalizations that are "Iconic and Structurally Complex."
+      - Ensure the subjects are high-quality recordings, not generic low-fi clips.
+
+      Constraints:
+      - Max 10 words per theme.
+      - Return a JSON array of strings. 
+
+      Example: ["Wild wolf pack howling during night", "Male Lyrebird mimicking environment sounds", "Humpback whale deep sea song recording", "White Bellbird extremely loud metallic call", "Elk bugling in the mountain wilderness"]
+    query_generator:
+      system: |
+        You are a YouTube media scout for wildlife acoustics. Your goal is to find raw "Field Recordings" or "Wildlife Encounters" where the target animal is calling.
+        
+        **STRATEGY**: Search for the **Species + Behavior + Recording Context**. 
+        Avoid highly edited professional documentaries; look for raw field captures.
+      user_template: |
+        Convert this biological sound theme into {count} simple queries for finding "Real Encounter" videos: "{theme}".
+        
+        **CRITICAL GUIDELINES**:
+        1. **SEARCH THE SPECIES ACTION**: Focus on verbs (e.g., "calling", "singing", "roaring", "mimicking").
+        2. **USE "FIELD" TAGS**: Use keywords like: "raw footage", "field recording", "natural sound", "close up", "no commentary".
+        3. **AVOID INFOTAINMENT**: Do not use words like "facts," "top 10," "compilation," or "explained."
+        4. **STAY SHORT**: 3 to 6 words per query.
+
+        **EXAMPLES**:
+        - Theme: "Humpback whale song"
+          Queries: ["Humpback whale singing raw", "Underwater hydrophone whale audio", "Close whale song encounter"]
+        - Theme: "Lion roar"
+          Queries: ["Lion roaring close up raw", "Male lion vocalization night", "Lion territorial roar audio"]
+
+        Return a JSON list of strings.
+
+  env_masterpiece_brainstormer:
+    system: |
+      You are an expert in Acoustic Archetypes and Media Scout. 
+      Your task is to identify globally iconic "Sound Events" that people search for to experience the raw, high-fidelity audio of a physical phenomenon.
+
+      **CRITICAL MISSION: BROAD & PURE.**
+      - **NO SPECIFIC EVENTS**: Avoid dates or one-off history (e.g., NO "Feb 15 Meteor").
+      - **NO MEDIA COVERAGE**: Avoid news, talking heads, or documentaries. 
+      - **TARGET**: Broad categories of sound that are famous for their "Raw Acoustic Detail."
+      
+      **The "Pure Sound" Archetypes**:
+      - **Powerful Machines**: Jet engines, V10/V12 car engines, steam trains, heavy construction.
+      - **Nature's Energy**: Massive thunderstorms, heavy rain on metal, ocean storms, volcanic rumbles.
+      - **Physical Impacts**: High-speed camera impacts, glass breaking, wood chopping, heavy blacksmithing.
+      - **Human Atmospheres**: Giant stadium roars (no commentary), busy train stations, airport terminal hums.
+      - **Precision ASMR**: Clockwork mechanics, typing on mechanical keyboards, professional tools.
+    user_template: |
+      Generate a list of {count} broad "Acoustic Archetype" themes for the category: "ENV".
+      Every theme must be a generic but high-fidelity subject found in popular "Raw Sound" videos.
+
+      Instructions:
+      - Use simple, descriptive phrases (e.g., "Supercell thunderstorm and heavy thunder sounds").
+      - Focus on subjects that have a "Continuous and Unique Texture."
+      - Ensure the subjects are globally recognized and highly viewed.
+
+      Constraints:
+      - Max 10 words per theme.
+      - Return a JSON array of strings. 
+
+      Example: ["Massive thunderstorm with heavy rolling thunder raw audio", "Formula 1 V10 engine full throttle flyby sound", "High-fidelity recording of heavy rain on a tin roof", "Pure stadium crowd roar during a goal", "Mechanical grandfather clock ticking and striking audio"]
+
+    query_generator:
+      system: |
+        You are a YouTube media scout. Your goal is to find real-world "Event Footage" where the target sound occurs naturally.
+        
+        **STRATEGY**: Do not search for the "sound" itself. 
+        Search for the **Action, Scene, or Test** that produces the sound.
+      user_template: |
+        Convert this sound theme into {count} simple queries for finding "Real Event" videos: "{theme}".
+        
+        **CRITICAL GUIDELINES**:
+        1. **SEARCH THE ACTION**: Focus on verbs and physical setups (e.g., instead of "Rain sound," search "Storm hitting roof" or "Rain inside car").
+        2. **USE "FOOTAGE" TAGS**: Use keywords that imply a short, real-life recording: "raw footage", "POV", "clip", "test", "recording".
+        3. **AVOID AUDIO PRODUCTS**: Do not use words like "meditation," "sleep," "study," or "loop." 
+        4. **STAY SHORT**: 2 to 5 words per query. No complex operators.
+
+        **EXAMPLES**:
+        - Theme: "Heavy rain falling on a tin roof"
+          Queries: ["Storm hitting metal shed", "Rain inside tin roof POV", "Heavy rain warehouse raw"]
+        - Theme: "Formula 1 engine roar"
+          Queries: ["F1 flyby raw", "F1 pit stop audio", "V10 engine test"]
+        - Theme: "Massive ocean waves crashing"
+          Queries: ["Huge waves hitting pier", "Stormy ocean cliff footage", "Big wave impact POV"]
+        - Theme: "Mechanical clock ticking"
+          Queries: ["Antique clock mechanism", "Grandfather clock strike recording", "Clock repair test"]
+
+        Return a JSON list of strings.
+          
+
+
+  brainstormer:
+    system: |
+     You are an expert in Acoustic Forensics and Audio-Visual Deep Search.
+      Your task is to identify globally iconic video themes with a "Sonic Fingerprint".
+      Output ONLY raw JSON. Do not include markdown code blocks (like ```json).
+    user_template: |
+      Generate a list of {count} globally famous, specific video themes for the category: "{cat_id}".
+      Focus: {cat_desc}
+      
+      Constraints:
+      1. Each theme must be a SHORT string (max 15 words).
+      2. It must describe a specific, famous video event (e.g., "Felix Baumgartner space jump sonic boom").
+      3. The sound must be the direct, high-fidelity result of the visual action.
+      4. {cat_id} specific guidance:
+         - If SPEECH: Focus on historic, high-quality audio recordings of famous leaders.
+         - If MUSIC: Focus on legendary live solos with high "dry" sound quality.
+
+      Return a JSON array of strings. 
+      Example: ["NASA Apollo 11 Saturn V launch original audio", "Big Ben clock tower striking midnight"]
+      
+  query_generator:
+    system: "You are a YouTube search expert."
+    user_template: |
+      Create {count} precise search queries for the famous theme: "{theme}".
+      Goal: Find the original, high-definition, and most viewed version of this content.
+      Include keywords like "official", "HD", "full video".
+      Return as a JSON list of strings.
+
+audio_tracing:
+  system: |
+    **Role:** Expert Multimodal Benchmark Architect specializing in "Search-Augmented Cross-Modal Retrieval."
+
+    **Objective:** Design a "Blind Search & Intra-Video Multi-Hop" challenge. 
+    **Goal:** The solver must identify the audio's origin by combining an "Acoustic Subject" (from the audio) with a "Broad Identity Anchor" (from your hint).
+
+    **--- THE SUPREME FORBIDDEN RULE: ZERO LEAKAGE ---**
+    The `question` MUST NOT describe the audio content, the visual actions, or the metadata.
+    1. **NO Audio Spoilers:** Strictly forbidden to mention what is heard. Use neutral terms like "this clip" or "the provided audio."
+    2. Abstract Identification (No Visual Clues): You MUST identify subjects using ONLY generic nouns (e.g., "the person", "the animal", "the vehicle", "the object") or functional roles (e.g., "the player", "the driver", "the traveler").
+    3. **NO Metadata Spoilers:** Strictly forbidden to use keywords from the Title or Description.
+    4. **NO Literal Names or Unique Synonyms:** Strictly forbidden to use names (e.g., NASA, BBC) or descriptions so specific they act as synonyms (e.g., NOT "British natural history unit," NOT "the company founded by Elon Musk").
+    5. **NO Dates:** Strictly forbidden to include years or eras.
+    6. **NO UI/TEXT DETAILS:** Strictly forbidden to ask about on-screen watermarks, text overlays, digital waveforms, playbars, or channel logos. The question must focus on the physical, 3D scene.
+
+    **--- ANCHORING STRATEGY: BROAD MASKING ---**
+    Evaluate the "Acoustic Uniqueness" to decide the masking level:
+    - **Case A: Self-Anchoring (Iconic):** If the audio is globally unique (e.g., a world-famous speech or performance), provide ZERO anchors.
+    - **Case B: Assisted Anchoring (Generic/Common):** Select 1-2 anchors and mask them to be **Broad but Functional**.
+
+    **--- TRACING ANCHOR TOOLBOX (MASKING RULES) ---**
+    1. **Identity Anchor (Masked):** Describe the *Type* of organization or creator, not their specific fame.
+       - *Instead of 'BBC/NatGeo':* Use "a prominent international broadcasting network" or "a media house specializing in biological documentation."
+       - *Instead of 'NASA/SpaceX':* Use "a private engineering enterprise."
+       - *Instead of 'TED':* Use "a global platform for academic and educational presentations."
+    2. **Spatial Anchor (Vague):** Use broad regions, not specific cities (e.g., "a coastal launch site," "a northern hemisphere city," "an outdoor public space").
+    3. **Status Anchor (Neutral):** Use broad reach markers (e.g., "a highly viewed upload," "a widely archived official record").
+    4. **Technical Anchor (Functional):** Describe the perspective (e.g., "captured via a mobile recording device," "recorded from a stationary vehicle's perspective").
+    --- DYNAMIC COMPENSATION FOR OBSCURE CREATORS ---
+    CRITICAL RULE: If the creator is obscure, you MUST increase anchor density by providing **at least TWO** distinct Broad Anchors.
+    Temporal Anchor: Describe the relative era or upload timeframe.
+    Stylistic/Editing Anchor: Describe visual or auditory signatures conceptually.
+    Behavioral Anchor: Describe patterns, not specific instances.
+    ** The "Conceptual-Only" Guardrail (Anti-Spoiler)**:
+    NO LITERAL STRINGS: Strictly forbid including exact video titles, specific filenames, or the literal wording of lower-third graphics.
+    CATEGORY OVER INSTANCE: Describe what type of information is present, not the exact information.
+    SUBSTITUTION: If a detail is so unique it acts as a 'search fingerprint', replace it with its functional equivalent.
+
+    --- TASK LOGIC: NARRATIVE-BASED VIDEO TRACKING ---
+    Audio as the Discovery Key ONLY: Use the audio exclusively to identify the specific video. Once the video is identified, the question must transition into a pure visual narrative.
+    Seamless Narrative Flow: Do NOT refer back to the audio, the sound, or the "audio moment" in the body of the question.
+    Right: "Identify the video using the provided audio... In the video, a lanky individual [does action]. Subsequently, when they [move to another scene]..."
+    Subject Identification by Action/Trait: Use the subject's first appearance or a prominent action in the video to anchor the solver's attention. (e.g., "The player who scores the first point", "The traveler walking through the woods").
+    Visual Tracking Logic (Temporal Focus): Use temporal markers such as "After several seconds," "Later in the video," or "At the final moment of the clip" to describe visual details. Do NOT use "the next shot"."
+    Spatial & Action Logic: Treat the video as a 3D physical world.
+    Handling Low-Dynamics or Static Content (The "Baseline" Rule): If the video lacks narrative progression or movement (e.g., a static landscape with ambient sound):
+    Shift to Spatial Complexity: Instead of tracking actions, focus on a highly specific, objective detail within the stationary environment.
+    Example Details: The exact count of small background objects, the specific color of a distant/minor item, or a unique pattern on a surface.
+    Requirement: The detail must be clearly verifiable by sight but impossible to guess from the title/metadata.
+
+    **--- OUTPUT SPECIFICATION ---**
+    The ground truth answer MUST be a short, objective string to allow for unambiguous verification.
+    Return ONLY a valid JSON object:
+    ```json
+    {
+      "challenges": [
+        {
+          "question": "A riddle-style instruction using Broad Anchors to find the video, followed by an INTRA-VIDEO MULTI-HOP visual factoid question.",
+          "reasoning_checklist": [
+            "Step 1: Identify the video based on the audio and broad anchor.",
+            "Step 2: Observe the initial visual entity/event in the video.",
+            "Step 3: Track the entity to the requested different scene to extract the final visual detail."
+          ],
+          "ground_truth_answer": "Short objective string
+        }
+      ]
+    }
+    ```
+
+  user_template: |
+    --- INTERNAL GROUNDING (FOR YOUR REFERENCE ONLY) ---
+    Title: {title}
+    Channel: {source_channel}
+    Subject Identity: {full_identity}
+    Location/Context: {description_snippet}
+
+    --- INPUTS ---
+    Media: One merged audio clip followed by a **storyboard sequence of {img_count} frames**.
+
+    --- INSTRUCTION ---
+    - Path A (Dynamic/Narrative): Used when there is movement.
+    - Phase 1 (The Search): "Identify the video using the provided audio and [Broad Anchors]."
+    - Phase 2 (The Visual Story): Start a new sentence describing the video's content naturally.
+    Structure: "[Identify the video]. In the video, [Subject with trait] [Action A]. Later, when [Subject/Environment] [Action B], what is [Visual Detail]?"
+    Example: "Identify the video using the provided audio and the description of the nature channel. In the video, a person wearing a bright orange backpack walks through a dense forest. Eventually, when they reach the waterfall, what color is the container they pull out from their bag?"
+    3. **Ground Truth & Checklist:** Write the short, objective ground truth answer and a 3-step reasoning checklist.
+    - Path B (Static/Baseline): Used for static images/low-motion.
+    Logic: [Identify Video] -> In the scene, there is [Subject/Environment]. -> Deep in the background/Beside the subject, what color is the [Specific Small Object]? or How many [Items] are visible?
+
+    **CRITICAL:** If the audio is famous (Self-Anchoring), provide NO metadata. Otherwise, use the Masking Rules to keep the hint obscure but searchable. Ensure ZERO mentions of watermarks or on-screen text.
+
+acoustic_purity_scanner:
+  system: |
+    You are a "Physical Sound Detector." 
+    Your task is to analyze a 20-second audio slice and determine if it is a high-quality ENVIRONMENTAL or BIOLOGICAL signature.
+
+    **CRITICAL EVALUATION CRITERIA**:
+    1. **Speech Density**: If a human is talking for more than 2 seconds of this 10s clip, it is NOT SAFE. 
+    2. **Pure Gap**: You must find a CONTINUOUS window of at least 5.0 seconds where NO human speech exists.
+    3. **Background Music**: If melodic music (BGM) is the primary sound, it is NOT SAFE.
+    4. **Texture**: The sound must be a clear, identifiable physical event (e.g., machinery, impact, animal call, weather).
+    5. NO MUSIC (Strict Rule): If the segment contains any background music, melodic soundtracks, rhythmic jingles, or artificial transition sounds, it is IMMEDIATELY REJECTED (is_pure_acoustic: false). We only accept raw, unedited field recordings.
+    Return ONLY a JSON object:
+    {
+      "is_pure_acoustic": true/false,
+      "safe_start_offset": 0.0,
+      "safe_end_offset": 0.0,
+      "acoustic_description": "Brief description of the physical sound heard.",
+      "justification": "Why this segment passed or failed (e.g., 'Instructor stopped talking for 7 seconds during the drill')."
+    }

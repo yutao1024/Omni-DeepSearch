@@ -1,0 +1,111 @@
+serper_api_key: "serper_key"
+
+search_api_key: ""
+
+jina_api_key: "jina_key" 
+
+
+llm:
+  default_provider: "qwen"
+  filter_provider:  "qwen"
+  inference_provider: "qwen"
+
+  mimo:
+    api_key: "" 
+    base_url: "https://openrouter.ai/api/v1"
+    model_name: "xiaomi/mimo-v2.5"
+    temperature: 0.0
+    max_tokens: 32768 
+    timeout: 300
+    max_concurrency: 20
+
+  qwen:
+    api_key: "" 
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    model_name: "qwen3.5-omni-plus"  
+    temperature: 0.0
+    max_tokens: 8192  
+    timeout: 300
+    max_concurrency: 10
+
+
+  gemini:
+    api_key: ""
+    base_url: "https://api.dubrify.com/v1"
+    model_name: "gemini-3.1-pro-preview"
+    temperature: 0.0
+    max_tokens: 32768
+    timeout: 250
+    max_concurrency: 20
+
+  nvidia:
+    api_key: "" 
+    base_url: "https://openrouter.ai/api/v1"
+    model_name: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    temperature: 0.0
+    max_tokens: 16384
+    timeout: 300
+    max_concurrency: 10
+
+
+  gpt:
+    api_key: ""
+    base_url: "https://api.dubrify.com/v1"
+    model_name: "gpt-5.4"
+    temperature: 0.0
+    max_tokens: 16384
+    timeout: 250
+    max_concurrency: 20
+
+  claude:
+    api_key: ""
+    base_url: "https://api.dubrify.com/v1"
+    model_name: "claude-sonnet-4-6" 
+    temperature: 0.0
+    max_tokens: 16384
+    timeout: 250
+    max_concurrency: 20
+
+
+workspace: "data_workspace"
+download_dir: "data_workspace/downloads"
+
+interaction_dir: "data_workspace/interactions" 
+output_benchmark: "data_workspace/audio_benchmark.json"
+cookies_path: "config/cookies.txt"
+prompts_path: "config/prompts.yaml"
+
+
+acquisition:
+  workspace: "data_workspace"
+
+  themes_per_domain: 60     
+  queries_per_theme: 1       
+  videos_per_query: 2        
+  min_view_count: 10000
+  min_subscriber_count: 10000
+
+  interaction:
+    pairs_to_generate: 30     
+    videos_per_side: 2     
+    max_retry: 2             
+    audio_count: 2           
+
+domains:
+  - id: "SPEECH"
+    name: "Human Voice"
+
+  - id: "MUSIC"
+    name: "Music & Instruments"
+
+  - id: "BIO"
+    name: "Biological Sounds"
+
+  - id: "ENV"
+    name: "Soundscapes & Ambience"
+
+
+sampling:
+  interval: 10.0          
+  audio_duration: 10.0   
+  max_samples_per_video: 5 
