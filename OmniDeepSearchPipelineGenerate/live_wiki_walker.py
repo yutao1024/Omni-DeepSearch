@@ -80,7 +80,6 @@ class LiveWikiWalker:
         return query
 
     async def _fetch_live_wiki_page(self, session: aiohttp.ClientSession, title: str) -> Tuple[str, List[Dict]]:
-        """异步抓取并解析维基百科页面内容和锚点"""
         url = f"https://en.wikipedia.org/wiki/{title.replace(' ', '_')}"
         html = await self._safe_get(session, url)
         if not html:
@@ -131,7 +130,6 @@ class LiveWikiWalker:
             return "", []
 
     async def query_llm(self, sys_prompt: str, user_prompt: str) -> str:
-        """异步调用多模态或文本 LLM"""
         if not self.llm_client:
             return '0'
         

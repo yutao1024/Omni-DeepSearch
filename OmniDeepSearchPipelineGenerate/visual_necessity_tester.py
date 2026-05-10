@@ -2,6 +2,8 @@ import os
 import json
 import re
 import logging
+import copy
+from urllib.parse import unquote
 from tool_text_search import search as mm_text_search
 from llm_provider import get_llm_provider
 
@@ -16,7 +18,38 @@ class VisualNecessityTester:
 
         provider_name = self.config['llm'].get('filter_provider', 'gpt')
         self.llm = get_llm_provider(self.config['llm'], provider_name)
-
+    def restructure_sample(sample: dict):
+        if 'challenge' in sample:
+            chall = sample['challenge']
+            question = None
+            answer = None
+            if 'challenges' in chall and isinstance(chall['challenges'], list) and len(chall['challenges']) > 0:
+                first = chall['challenges'][0]
+                question = first.get('question')
+                answer = first.get('ground_truth_answer')
+            else:
+                question = chall.get('question')
+                answer = chall.get('ground_truth_answer')
+            del sample['challenge']
+            if question is not None:
+                sample['question'] = unquote(str(question)) if isinstance(question, str) else question
+            if answer is not None:
+                if isinstance(answer, dict):
+                    answer = answer.get('visual_verification_answer', answer)
+                elif isinstance(answer, list) and len(answer) > 1:
+                    answer = answer[1]
+                sample['answer'] = unquote(str(answer)) if isinstance(answer, str) else answer
+        if 'video_info' in sample:
+            del sample['video_info']
+        if 'kg_info' in sample and isinstance(sample['kg_info'], dict):
+            kg = sample['kg_info']
+            node_seq = kg.get('node_sequence')
+            if isinstance(node_seq, list) and len(node_seq) > 0:
+                decoded_nodes = [unquote(str(node)) for node in node_seq]
+                sample['golden_path'] = ' -> '.join(decoded_nodes)
+            del sample['kg_info']
+        return sample
+    
     def run_blind_search(self, item):
         question = item['challenge']['challenges'][0]['question']
         identity_hint = item.get('video_info', {}).get('identity', 'Unknown Subject')
@@ -104,4 +137,24 @@ class VisualNecessityTester:
             json.dump(verified_data, f, indent=2, ensure_ascii=False)
         logger.info(f"Done! Kept: {total_kept}, Rejected: {total_leaked}")
         logger.info(f"Saved verified items to: {output_path}")
+        restructured = []
+        for category, items in verified_data.items():
+            for item in items:
+                new_item = self.restructure_sample(copy.deepcopy(item))
+                new_item['task_category'] = category
+                if 'task_category' in new_item:
+                    cat_val = new_item.pop('task_category')
+                    new_item = {'task_category': cat_val, **new_item}
+                restructured.append(new_item)
+
+        output_path = input_path.replace(".json", "_VISUAL_VERIFIED.json")
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(restructured, f, indent=2, ensure_ascii=False)
+
+        detailed_path = output_path.replace('.json', '_detailed.json')
+        with open(detailed_path, 'w', encoding='utf-8') as f:
+            json.dump(verified_data, f, indent=2, ensure_ascii=False)
+
+        logger.info(f"Done! Standard-verified dataset saved to {output_path}")
         return output_path

@@ -112,7 +112,7 @@ class AcquisitionPipeline:
         self.l_logger.info(f"TASK: {task}\n[SYS]: {sys}\n[USER]: {user}\n[RES]: {res}")
 
     async def _perform_slicing_async(self, vid_id, video_path, theme_dir):
-        """适配异步 VideoTools 的切片操作"""
+
         await self.vt.process_multimodal_sampling(
             video_manifest={vid_id: {"path": video_path}},
             interval=self.config['sampling']['interval'],

@@ -36,42 +36,61 @@ class InferencePipeline:
 
         if output_dir and os.path.exists(output_dir):
             self.output_dir = os.path.abspath(output_dir)
-
+        elif output_dir and not os.path.exists(output_dir):
+            parent = os.path.dirname(output_dir)
+            if parent and (os.path.exists(parent) or not parent):
+                os.makedirs(parent, exist_ok=True) if parent else None
+                self.output_dir = os.path.dirname(output_dir) if parent else os.path.dirname(os.path.abspath(output_dir))
+                self.report_file = os.path.abspath(output_dir)
+            else:
+                os.makedirs(output_dir, exist_ok=True)
+                self.output_dir = os.path.abspath(output_dir)
         else:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             self.output_dir = os.path.join(self.workspace_root, f"eval_results_{timestamp}")
             os.makedirs(self.output_dir, exist_ok=True)
 
-        self.report_file = os.path.join(self.output_dir, "final_report.json")
-        self.file_lock = None 
+        if not hasattr(self, 'report_file'):
+            self.report_file = os.path.join(self.output_dir, "final_report.json")
+        self.file_lock = None
 
-    def _get_all_datasets(self):
+    def _load_all_items(self):
+        if os.path.isfile(self.workspace_root):
+            with open(self.workspace_root, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                raise ValueError("Top-level JSON must be a list for HF format")
+            json_dir = os.path.dirname(self.workspace_root)
+            return [(item, json_dir) for item in data]
+
         dataset_files = []
         for root, dirs, files in os.walk(self.workspace_root):
             if "dataset.json" in files:
                 dataset_files.append(os.path.join(root, "dataset.json"))
-        return dataset_files
+        items = []
+        for j_file in dataset_files:
+            json_dir = os.path.dirname(j_file)
+            with open(j_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for category, cat_items in data.items():
+                    if isinstance(cat_items, list):
+                        for item in cat_items:
+                            items.append((item, json_dir))
+            elif isinstance(data, list):
+                for item in data:
+                    items.append((item, json_dir))
+        return items
 
-    def _get_media_paths(self, item, json_dir):
-        raw_paths = []
-        if "audio_file" in item:
-            raw_paths.append(item["audio_file"])
-        if "audio_files" in item:
-            raw_paths.extend(item["audio_files"])
-        
-        valid_paths = []
-        for p in raw_paths:
-            full_p = p if os.path.isabs(p) else os.path.normpath(os.path.join(json_dir, p))
-            if os.path.exists(full_p):
-                valid_paths.append(full_p)
-            else:
-                logger.warning(f"File not found: {full_p}")
-        return valid_paths
-
-    def _identify_task(self, item, json_path):
+    def _identify_task(self, item):
         sample_id = str(item.get("sample_id", ""))
-        is_video_task = "TRACING" in sample_id or "/trace/" in json_path.lower()
-        
+
+        if "task_category" in item and "question" in item:
+            cat = item["task_category"]
+            is_video_task = cat.startswith("trace/")
+            question = item["question"]
+            gt = item.get("answer", item.get("ground_truth_answer", ""))
+            return question, gt, is_video_task
         try:
             challenge_data = item.get("challenge", {}).get("challenges", [{}])[0]
             question = challenge_data.get("question", "")
@@ -81,19 +100,46 @@ class InferencePipeline:
         except Exception:
             question, gt_answer = "", ""
 
+        is_video_task = "TRACING" in sample_id or "/trace/" in item.get("json_path", "").lower()
         return question, gt_answer, is_video_task
 
-    def _load_progress(self):
+    def _get_media_paths(self, item, json_dir):
+        raw_paths = []
+        af = item.get("audio_file")
+        if isinstance(af, list):
+            raw_paths.extend(af)
+        elif isinstance(af, str):
+            raw_paths.append(af)
 
+        afs = item.get("audio_files")
+        if isinstance(afs, list):
+            raw_paths.extend(afs)
+        elif isinstance(afs, str):
+            raw_paths.append(afs)
+
+        if not raw_paths and "audio_file" in item:
+            raw_paths.append(item["audio_file"])
+
+        valid_paths = []
+        for p in raw_paths:
+            if os.path.isabs(p):
+                full = p
+            else:
+                full = os.path.normpath(os.path.join(json_dir, p))
+            if os.path.exists(full):
+                valid_paths.append(full)
+            else:
+                logger.warning(f"File not found: {full}")
+        return valid_paths
+
+    def _load_progress(self):
         if os.path.exists(self.report_file):
             try:
                 with open(self.report_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 report = data.get("detailed_data", {})
                 per_question_results = data.get("per_question_status", [])
-                
                 processed_ids = {item["sample_id"] for item in per_question_results}
-
                 return report, per_question_results, processed_ids
             except Exception as e:
                 logger.error(f"Failed to load progress file: {e}. Starting fresh.")
@@ -165,7 +211,7 @@ class InferencePipeline:
 
         return total_q, total_c, overall_acc, ordered_macros, macro_summary, final_statistics, sorted_categories
 
-    async def process_sample(self, item, json_path, semaphore, report, per_question_results, processed_ids):
+    async def process_sample(self, item, json_dir, semaphore, report, per_question_results, processed_ids):
         sample_id = str(item.get('sample_id', 'unknown'))
 
         if sample_id in processed_ids:
@@ -173,12 +219,17 @@ class InferencePipeline:
             return
 
         async with semaphore:
-            json_dir = os.path.dirname(json_path)
-            category = os.path.relpath(json_dir, self.workspace_root).replace('\\', '/')
-            q, gt, is_video_task = self._identify_task(item, json_path)
+            cat_from_field = item.get("task_category")
+            if cat_from_field:
+                category = cat_from_field  
+            else:
+                category = os.path.relpath(json_dir, self.workspace_root).replace('\\', '/')
+
+            q, gt, is_video_task = self._identify_task(item)
             media_paths = self._get_media_paths(item, json_dir)
             
             if not q or not media_paths:
+                logger.warning(f"Skipping {sample_id}: missing question or media")
                 return
 
             max_retries = 10
@@ -239,20 +290,16 @@ class InferencePipeline:
         
         report, per_question_results, processed_ids = self._load_progress()
         
-        dataset_files = self._get_all_datasets()
-        logger.info(f"Found {len(dataset_files)} sub-datasets.")
+        all_items = self._load_all_items()
+        logger.info(f"Loaded {len(all_items)} samples.")
         
         semaphore = asyncio.Semaphore(5) 
         tasks = []
 
-        for j_file in dataset_files:
-            with open(j_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                items = data if isinstance(data, list) else data.get("INTERACTION", [])
-                for item in items:
-                    tasks.append(self.process_sample(
-                        item, j_file, semaphore, report, per_question_results, processed_ids
-                    ))
+        for item, json_dir in all_items:
+            tasks.append(self.process_sample(
+                item, json_dir, semaphore, report, per_question_results, processed_ids
+            ))
 
         await asyncio.gather(*tasks)
 
@@ -279,17 +326,19 @@ class InferencePipeline:
         logger.info("="*60)
 
 if __name__ == "__main__":
-
     if len(sys.argv) < 2:
-        print("Usage: python inference_pipeline.py <workspace_path> [resume_dir]")
+        print("Usage: python inference_pipeline.py <workspace_path_or_json_file> [output_dir_or_file]")
+        print("  workspace_path_or_json_file : path to merged.json or a dataset directory")
+        print("  output_dir_or_file          : (optional) directory for resuming/ output directory, ")
+        print("                                or a specific output .json file (e.g. results.json)")
         sys.exit(1)
 
     WORKSPACE = sys.argv[1]
-    RESUME_DIR = sys.argv[2] if len(sys.argv) > 2 else None
+    OUTPUT_SPEC = sys.argv[2] if len(sys.argv) > 2 else None
 
     if not os.path.exists(WORKSPACE):
-        logger.error(f"Workspace path not found: {WORKSPACE}")
+        logger.error(f"Path not found: {WORKSPACE}")
         sys.exit(1)
 
-    pipeline = InferencePipeline(workspace_root=WORKSPACE, output_dir=RESUME_DIR)
+    pipeline = InferencePipeline(workspace_root=WORKSPACE, output_dir=OUTPUT_SPEC)
     asyncio.run(pipeline.run())

@@ -14,7 +14,6 @@ except ImportError:
 logger = logging.getLogger("wiki_utils")
 
 def _sync_process_image(file_content, image_url, save_path, max_image_pixels):
-    """保留原有的 PIL 处理逻辑，但在线程中运行"""
     if image_url.lower().endswith('.svg'):
         if not HAS_CAIROSVG: 
             return None

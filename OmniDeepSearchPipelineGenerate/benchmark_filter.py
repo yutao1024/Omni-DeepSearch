@@ -166,9 +166,6 @@ class BenchmarkFilter:
             logger.info(f"    Done for {folder}: Kept {total_kept}")
 
     async def process_custom_file(self, input_file_path, output_tag="refined"):
-        """
-        处理自定义文件。逻辑完全保留。
-        """
         if not os.path.exists(input_file_path):
             logger.error(f"File not found: {input_file_path}")
             return

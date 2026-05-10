@@ -5,9 +5,9 @@ jina_api_key: "jina_key"
 
 
 llm:
-  default_provider: "qwen"
-  filter_provider:  "qwen"
-  inference_provider: "qwen"
+  default_provider: ""
+  filter_provider:  ""
+  inference_provider: ""
 
   mimo:
     api_key: "" 
@@ -40,7 +40,7 @@ llm:
   nvidia:
     api_key: "" 
     base_url: ""
-    model_name: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+    model_name: ""
     temperature: 0.0
     max_tokens: 16384
     timeout: 300

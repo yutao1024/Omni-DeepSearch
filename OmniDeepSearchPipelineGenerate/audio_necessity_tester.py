@@ -6,7 +6,8 @@ import base64
 import mimetypes
 import logging
 import asyncio
-
+import copy
+from urllib.parse import unquote
 from llm_provider import get_llm_provider
 from tool_video_search import func_video_search_by_text_query
 from tool_text_search import search as mm_text_search
@@ -31,9 +32,39 @@ class AudioNecessityTester:
         self.max_concurrent_tasks = max_concurrent_tasks
         
     def _read_file_b64_sync(self, media_path):
-        """同步读取文件并进行base64编码的辅助方法"""
         with open(media_path, "rb") as f:
             return base64.b64encode(f.read()).decode('utf-8')
+    def restructure_sample(sample: dict):
+        if 'challenge' in sample:
+            chall = sample['challenge']
+            question = None
+            answer = None
+            if 'challenges' in chall and isinstance(chall['challenges'], list) and len(chall['challenges']) > 0:
+                first = chall['challenges'][0]
+                question = first.get('question')
+                answer = first.get('ground_truth_answer')
+            else:
+                question = chall.get('question')
+                answer = chall.get('ground_truth_answer')
+            del sample['challenge']
+            if question is not None:
+                sample['question'] = unquote(str(question)) if isinstance(question, str) else question
+            if answer is not None:
+                if isinstance(answer, dict):
+                    answer = answer.get('visual_verification_answer', answer)
+                elif isinstance(answer, list) and len(answer) > 1:
+                    answer = answer[1]
+                sample['answer'] = unquote(str(answer)) if isinstance(answer, str) else answer
+        if 'video_info' in sample:
+            del sample['video_info']
+        if 'kg_info' in sample and isinstance(sample['kg_info'], dict):
+            kg = sample['kg_info']
+            node_seq = kg.get('node_sequence')
+            if isinstance(node_seq, list) and len(node_seq) > 0:
+                decoded_nodes = [unquote(str(node)) for node in node_seq]
+                sample['golden_path'] = ' -> '.join(decoded_nodes)
+            del sample['kg_info']
+        return sample
 
     async def _encode_media_to_message(self, media_path):
         if not os.path.exists(media_path):
@@ -136,8 +167,6 @@ class AudioNecessityTester:
         
         res = await self.llm.agenerate(system_prompt=sys_p, user_prompt=user_p)
         return "YES" in res.upper()
-
-
 
     async def run_blind_search(self, question, is_video_task=False, media_paths=None):
         raw_sys_p = ""  # 不再需要，但签名保留兼容性
@@ -493,5 +522,21 @@ class AudioNecessityTester:
 
 
         self._save_progress_sync(out_nec, out_ind, out_log, necessary_data, independent_data, analysis_log)
+        restructured = []
+        for category, items in necessary_data.items():
+            for item in items:
+                new_item = self.restructure_sample(copy.deepcopy(item))
+                new_item['task_category'] = category
+                if 'task_category' in new_item:
+                    cat_val = new_item.pop('task_category')
+                    new_item = {'task_category': cat_val, **new_item}
+                restructured.append(new_item)
+
+        with open(out_nec, 'w', encoding='utf-8') as f:
+            json.dump(restructured, f, indent=2, ensure_ascii=False)
+        detailed_nec = out_nec.replace('.json', '_detailed.json')
+        with open(detailed_nec, 'w', encoding='utf-8') as f:
+            json.dump(necessary_data, f, indent=2, ensure_ascii=False)
+
         return True
 

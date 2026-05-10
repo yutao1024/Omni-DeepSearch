@@ -107,9 +107,7 @@ class AudioTracingPipeline(AudioDeepSearchPipeline):
             return False
 
     async def _get_full_video_context(self, video_id, video_file, workspace_dir):
-        """
-        利用 VideoTools 工具从整个视频中均匀抽取最多 MAX_CONTEXT_FRAMES 帧
-        """
+
         def _sync_cv2_get_duration():
             cap = cv2.VideoCapture(video_file)
             fps = cap.get(cv2.CAP_PROP_FPS)
@@ -259,7 +257,7 @@ class AudioTracingPipeline(AudioDeepSearchPipeline):
                     break 
 
     async def _update_theme_meta(self, save_path, theme, cat_id, vid_id, v, meta):
-        """提取出的写文件逻辑，确保异步安全"""
+
         meta_file = os.path.join(save_path, "theme_meta.json")
 
         async with self.file_lock:
@@ -430,7 +428,7 @@ class AudioTracingPipeline(AudioDeepSearchPipeline):
                 continue
 
     async def _process_with_original_logic(self, category, video_info, video_file, sample_folder, timed_files):
-        """增加日志的 SPEECH 处理逻辑"""
+
         pick_n = min(self.num_consecutive, len(timed_files))
         video_id = video_info['id'] 
         

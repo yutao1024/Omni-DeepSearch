@@ -64,7 +64,6 @@ async def get_serper_image_response(query: str, api_key: str, **kwargs) -> Dict[
     return data
 
 async def get_serpapi_image_response(query: str, search_api_key: str) -> List[Dict[str, Any]]:
-    """使用线程池执行同步的 SerpApi 请求"""
     def _sync_search():
         params = {
             "engine": "google_images_light",
@@ -218,9 +217,6 @@ async def func_image_search_by_text_query(
     search_api_key: Optional[str] = None,
     topk: int = 1,
 ) -> Tuple[List[str], Dict[str, str]]:
-    """
-    在线文本搜图主入口。即使失败也返回带上下文的总结。
-    """
     if not isinstance(query_list, list) or len(query_list) == 0:
         return [], {"result": "[Image Search Summary] No valid search queries were provided. Proceeding with existing context."}
 

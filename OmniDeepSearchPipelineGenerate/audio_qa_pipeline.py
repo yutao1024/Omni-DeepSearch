@@ -205,7 +205,7 @@ class AudioDeepSearchPipeline:
             json.dump(self.final_benchmark, f, indent=2, ensure_ascii=False)
 
     async def _process_video_consecutive(self, category, theme_display_name, video_info, theme_path):
-        """处理单条视频切片的异步流水线"""
+
         async with self.semaphore:
             video_id = video_info['id']
             sample_folder_path = os.path.join(theme_path, f"samples_{video_id}")
@@ -363,7 +363,7 @@ class AudioDeepSearchPipeline:
         self.final_benchmark[category].append(result_data)
 
     async def _search_wikipedia_title_async(self, query):
-        """在线程池中执行同步的 Wikipedia API 模糊搜索"""
+
         def _sync():
             search_url = "https://en.wikipedia.org/w/api.php"
             params = {"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": 1}
@@ -424,7 +424,7 @@ class AudioDeepSearchPipeline:
         return None, None
     
     async def _process_interaction_pair(self, pair_id, pair_dir, pair_meta):
-        """核心处理逻辑：支持 N 个 side 的动态处理"""
+
         async with self.semaphore:
             side_labels = sorted(pair_meta['sides'].keys())
             processed_clips = []
@@ -555,7 +555,7 @@ class AudioDeepSearchPipeline:
                 logger.error(f"    [Error] Interaction failed for {pair_id}: {e}")
 
     async def _prepare_interaction_audio_async(self, video_info, side_dir):
-        """音频预处理逻辑异步包装 - 修改为只返回全部切片列表"""
+
         def _sync():
             video_id = video_info['id']
             sample_folder_path = os.path.join(side_dir, f"samples_{video_id}")
@@ -574,7 +574,7 @@ class AudioDeepSearchPipeline:
         return await asyncio.to_thread(_sync)
 
     async def run_interaction_generation(self):
-        """交互题异步并行调度 - 兼容 2 音频及多音频"""
+
         if not os.path.exists(self.interaction_dir): 
             logger.warning(f"Interaction dir {self.interaction_dir} does not exist. Writing empty benchmark.")
             with open(self.output_file, 'w', encoding='utf-8') as f:
@@ -601,7 +601,6 @@ class AudioDeepSearchPipeline:
             json.dump(self.final_benchmark, f, indent=2, ensure_ascii=False)
 
     async def run_full_pipeline(self):
-        """全量流水线异步驱动"""
         logger.info("========== ASYNC PIPELINE START ==========")
 
         logger.info(f"[Step 1] Generating raw questions (Async)...")
