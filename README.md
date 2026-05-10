@@ -13,7 +13,7 @@
 
 <div align='center'>
 
-[🔥 News](#-news) | [🌈 Overview](#-overview) | [🤗 Dataset](#-dataset) | [🚀 Quick Start](#-quick-start) | [📄 License](#-license) | [📖 Citation](#-citation)
+[🔥 News](#-news) | [🌈 Overview](#-overview) | [🤗 Dataset](#-dataset) | [🚀 Quick Start](#-quick-start) |  [📖 Citation](#-citation)
 
 </div>
 
@@ -339,12 +339,6 @@ data_workspace/
         ├── target_images_for_llm/           # (audio‑to‑image task)
         └── ground_truth_images/             # (tracing task)
 ```
-
-## 📄 License
-
-[![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-
-This project and dataset are licensed under the **Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)**. 
 
 ## 📖 Citation
 Please kindly cite our paper if you find this project or dataset helpful.
