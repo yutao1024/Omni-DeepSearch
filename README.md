@@ -135,6 +135,12 @@ pip install -r requirements.txt
 
 #### 4. Configuration
 Edit `config/config.yaml` with your own API keys, LLM configurations, and paths.  
+The `llm` section has two parts: **role assignment** (choose which provider handles each task) and **provider settings** (connection details and model parameters).  
+
+- Set `default_provider`, `filter_provider`, and `inference_provider` to the **key** of the provider you want to use (e.g., `gemini`, `gpt`).  
+- Under each provider key, fill in your own `api_key`, `base_url`, and `model_name`. The remaining parameters (`temperature`, `max_tokens`, `timeout`, `max_concurrency`) can usually stay as shown.  
+
+You can define multiple providers (Gemini, GPT, Qwen, Claude, etc.) and then **mix and match** them for different roles – for example, use a cheaper model for filtering and a more capable one for generation.  
 A minimal example:
 ```yaml
 serper_api_key: "your-serper-key"     # used for web search (Serper.dev)
