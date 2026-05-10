@@ -41,7 +41,6 @@ Access the Omni-DeepSearch dataset, featuring complex multi-hop reasoning audio 
 - [Tuning acquisition volume](#5-tuning-acquisition-volume)
 - [Running the Pipelines](#-Running-the-Pipelines)
 - [Inference & Evaluation](#-inference--evaluation)
-- [Output structure](#-output-structure)
 ### Prerequisites  
 Before installation, ensure you have the following system dependencies installed:
 - **Python** 3.8+
@@ -315,11 +314,25 @@ If you have already successfully run `acquire-audio` (or `tracing` acquisition) 
 
 After generating benchmarks, you can evaluate model performance using the evaluation command.
 
-**Basic evaluation:**
-```bash
-python run_pipeline.py evaluate /path/to/merged.json
+If you’ve downloaded the Omni‑DeepSearch dataset from Hugging Face (e.g., with `huggingface_hub`), you can evaluate it directly without re‑running the generation pipelines. Simply point the `evaluate` command to the `merged.json` file and make sure the audio clips are placed in a folder named `audio_clips` next to it:
+After downloading, your dataset directory should look like this:
 ```
-The pipeline automatically detects task categories, runs inference, and saves a detailed report (`final_report.json`) in a timestamped folder next to the input file.
+your_dataset/
+├── merged.json
+└── audio_clips/
+    ├── SPEECH_xxxxxx_000000.wav
+    ├── MUSIC_xxxxxx_000105.wav
+    ├── BIO_xxxxxx_000230.wav
+    └── ... (more audio files)
+```
+```bash
+# After downloading from Hugging Face
+# Make sure the directory contains:
+#   merged.json
+#   audio_clips/*.wav
+python run_pipeline.py evaluate your_dataset/merged.json
+```
+The pipeline automatically detects task categories, runs inference, and saves a detailed report in a timestamped folder next to the input file.
 
 **Specifying an output directory or file (recommended for clarity and resuming):**
 ```bash
@@ -342,24 +355,6 @@ Simply run the exact same command again (with the same output directory or file)
 - `sub_category_stats` – accuracy per detailed sub‑category (e.g., `single/SPEECH`, `image/BIO`, `video/ENV`, `multi/2WAY`).
 - `per_question_status` – verdict (`Correct` / `Wrong`) and number of retries for each sample.
 - `detailed_data` – full records including model answer, evaluator votes, thought process, etc.
-
-### 📂 Output structure
-After a successful run, you will find:
-```
-data_workspace/
-├── downloads/           # Raw video files (organised by domain)
-├── interactions/        # Multi‑audio interaction source data
-├── trace/               # Tracing‑specific downloads
-└── benchmark_runs/      # Generated benchmarks, filtered versions, evaluation reports
-    └── <timestamp>_<TASK>/
-        ├── benchmark.json
-        ├── benchmark_FINAL_HARD.json
-        ├── benchmark_AUDIO_NECESSARY.json
-        ├── benchmark_VISUAL_VERIFIED.json   (for visual tasks)
-        ├── audio_clips/                     # Final curated audio clips
-        ├── target_images_for_llm/           # (audio‑to‑image task)
-        └── ground_truth_images/             # (tracing task)
-```
 
 ## 📖 Citation
 Please kindly cite our paper if you find this project or dataset helpful.
