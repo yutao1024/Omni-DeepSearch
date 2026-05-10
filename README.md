@@ -13,7 +13,7 @@
 
 <div align='center'>
 
-[🔥 News](#-news) | [🌈 Overview](#-overview) | [🤗 Dataset](#-dataset) | [🚀 Quick Start](#-quick-start) | [📖 Citation](#-citation)
+[🔥 News](#-news) | [🌈 Overview](#-overview) | [🤗 Dataset](#-dataset) | [🚀 Quick Start](#-quick-start) | [📄 License](#-license) | [📖 Citation](#-citation)
 
 </div>
 
@@ -35,32 +35,98 @@
 Access the Omni-DeepSearch dataset, featuring complex multi-hop reasoning audio QA pairs, now available on Hugging Face: [Omni-DeepSearch Dataset](https://huggingface.co/datasets/Kirito-Lab/Omni-DeepSearch).
 
 ## 🚀 Quick Start
-
-### Prerequisites
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#4-configuration)
+- [Tuning acquisition volume](#5-tuning-acquisition-volume)
+- [Running the Pipelines](#-Running-the-Pipelines)
+- [Inference & Evaluation](#-inference--evaluation)
+- [Output structure](#-output-structure)
+### Prerequisites  
 Before installation, ensure you have the following system dependencies installed:
 - **Python** 3.8+
 - **FFmpeg** (for audio extraction and slicing)
 - **Node.js** (required by `yt‑dlp`'s JavaScript runtime)
+
+If you do not have `FFmpeg` or `Node.js`, or you are on a system without root access, you can install them locally (user‑space only) with the steps below. No `sudo` is required.
+
+#### Install FFmpeg locally
+1. Download the static build for Linux:
+   ```bash
+   wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz
+   tar -xf ffmpeg-release-amd64-static.tar.xz
+   ```
+2. Move the binaries to a directory in your `PATH`, for example `~/.local/bin`:
+   ```bash
+   mkdir -p ~/.local/bin
+   cp ffmpeg-*-static/ffmpeg ffmpeg-*-static/ffprobe ~/.local/bin/
+   ```
+3. Ensure `~/.local/bin` is in your `PATH`:
+   ```bash
+   echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+4. Verify installation:
+   ```bash
+   ffmpeg -version
+   ffprobe -version
+   ```
+
+#### Install Node.js locally
+1. Download the pre‑compiled Linux binary:
+   ```bash
+   wget https://nodejs.org/dist/v20.11.0/node-v20.11.0-linux-x64.tar.xz
+   tar -xf node-v20.11.0-linux-x64.tar.xz
+   ```
+2. Move the binaries to `~/.local/bin`:
+   ```bash
+   cp node-v20.11.0-linux-x64/bin/node ~/.local/bin/
+   ```
+3. Make sure `~/.local/bin` is in your `PATH` (as above).
+4. Verify installation:
+   ```bash
+   node --version
+   ```
+
+> **Note for macOS / Windows:**  
+> - macOS: `brew install ffmpeg node` (recommended).  
+> - Windows: Download official installers from [ffmpeg.org](https://ffmpeg.org/download.html) and [nodejs.org](https://nodejs.org), and add them to your system `PATH`.
+
 
 ### Installation
 
 #### 1. Clone this repository and navigate to the folder:
 ```bash
 git clone https://github.com/yutao1024/Omni-DeepSearch.git
-cd omni-bench
+cd Omni-DeepSearch/OmniDeepSearchPipelineGenerate
 ```
-
 #### 2. Create a dedicated Python environment
 We strongly recommend using a virtual environment to avoid dependency conflicts.
-```bash
-# Using venv
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Or using Conda
-conda create -n omni-bench python=3.10
+**Option A: Using venv (if you can install python3-venv)**
+```bash
+# Install the venv module if missing (Debian/Ubuntu)
+sudo apt update && sudo apt install python3-venv -y
+
+# Create and activate the environment
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**Option B: Using Conda (no root required)**
+```bash
+conda create -n omni-bench python=3.10 -y
 conda activate omni-bench
 ```
+
+**Option C: Using virtualenv (fallback)**
+```bash
+pip install --user virtualenv
+python -m virtualenv venv
+source venv/bin/activate
+```
+
+Choose the method that best fits your system. All subsequent commands assume the environment is activated.
 
 #### 3. Install Python dependencies
 ```bash
@@ -78,9 +144,13 @@ llm:
   default_provider: ""               # main model for generation 
   filter_provider: ""                # lighter model for filtering/auditing tasks
   gemini:
-    api_key: "your-gemini-key"
-    base_url: "your-gemini-url"
-    model_name: "your-model-version"
+    api_key: ""                 # API key for the provider
+    base_url: ""                # Base URL of the API endpoint
+    model_name: ""              # Exact model name 
+    temperature: 0.0            # Sampling temperature (0.0 = deterministic)
+    max_tokens:                 # Max tokens in the response (leave blank for default)
+    timeout: 300                # Request timeout in seconds
+    max_concurrency: 20         # Max parallel requests to this provider
   # add other providers (qwen, gpt, claude, mimo) similarly
 
 # Where downloaded videos and generated benchmarks will be stored
@@ -90,7 +160,21 @@ acquisition:
 # Path to a YouTube cookies file (required for age‑restricted or private videos)
 cookies_path: "config/cookies.txt"
 ```
+**Important for Wikipedia access:**  
+All requests to Wikipedia (page scraping, API calls, image downloads) must include a valid `User-Agent` header, otherwise you will receive HTTP 403 Forbidden errors.  
 
+Two files in the project are responsible for Wikipedia access and have been pre‑configured with a placeholder User‑Agent:
+- `wiki_utils.py` (image download function)
+- `live_wiki_walker.py` (WikiWalker class)
+
+**You MUST edit both files** and replace `your-email@example.com` with your own contact address (e.g., your name or email). This is required by [Wikimedia's User-Agent policy](https://meta.wikimedia.org/wiki/User-Agent_policy).
+
+Example after editing:
+```python
+headers = {
+    'User-Agent': 'OmniDeepSearch/1.0 (your-real-email@example.com)'
+}
+```
 **How to obtain the required API keys:**
 
 - **Serper API Key (serper_api_key):**  
@@ -112,14 +196,13 @@ cookies_path: "config/cookies.txt"
 - Adjust the `workspace` path if you want your downloads and generated data to reside elsewhere (e.g., an external drive).
 
 #### 5. Tuning acquisition volume
-The amount of data downloaded and the diversity of the final benchmark are controlled by several settings in `config.yaml`. Add or modify them under the `acquisition`, `max_threads`, and `sampling` sections according to your needs.
+The amount of data downloaded and the diversity of the final benchmark are controlled by several settings in `config.yaml`. Add or modify them under the `acquisition`, and `sampling` sections according to your needs.
 
 | Parameter | Section | Description |
 |-----------|---------|-------------|
 | `themes_per_domain` | `acquisition` | Number of distinct topics/themes the LLM generates for each audio domain (SPEECH, MUSIC, BIO, ENV). Each theme leads to one or more YouTube searches. |
 | `queries_per_theme` | `acquisition` | How many different YouTube search queries the LLM creates per theme. More queries increase the chance of finding suitable, high‑quality videos. |
 | `videos_per_query` | `acquisition` | Maximum number of videos the pipeline attempts to download for each search query. Higher values provide fallback options. |
-| `max_threads` | root | Maximum number of concurrent download/processing tasks. Raise this for faster downloads; lower it if you encounter rate‑limit errors. |
 | `interval` | `sampling` | Time in seconds between consecutive slices taken from a downloaded video. |
 | `audio_duration` | `sampling` | Duration in seconds of each extracted audio clip. |
 | `max_samples_per_video` | `sampling` | Maximum number of consecutive slices used from a single video when building a clip. |
@@ -131,7 +214,6 @@ acquisition:
   themes_per_domain: 10
   queries_per_theme: 3
   videos_per_query: 2
-max_threads: 20
 sampling:
   interval: 8.0
   audio_duration: 12.0

@@ -34,7 +34,7 @@ class AudioNecessityTester:
     def _read_file_b64_sync(self, media_path):
         with open(media_path, "rb") as f:
             return base64.b64encode(f.read()).decode('utf-8')
-    def restructure_sample(sample: dict):
+    def restructure_sample(self,sample: dict):
         if 'challenge' in sample:
             chall = sample['challenge']
             question = None
@@ -533,6 +533,10 @@ class AudioNecessityTester:
                 restructured.append(new_item)
 
         with open(out_nec, 'w', encoding='utf-8') as f:
+            json.dump(necessary_data, f, indent=2, ensure_ascii=False)
+
+        restructured_file = out_nec.replace(".json", "_RESTRUCTURED.json")
+        with open(restructured_file, 'w', encoding='utf-8') as f:
             json.dump(restructured, f, indent=2, ensure_ascii=False)
         detailed_nec = out_nec.replace('.json', '_detailed.json')
         with open(detailed_nec, 'w', encoding='utf-8') as f:

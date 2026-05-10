@@ -46,8 +46,12 @@ class InferencePipeline:
                 os.makedirs(output_dir, exist_ok=True)
                 self.output_dir = os.path.abspath(output_dir)
         else:
+            if os.path.isfile(self.workspace_root):
+                base_dir = os.path.dirname(self.workspace_root)
+            else:
+                base_dir = self.workspace_root
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            self.output_dir = os.path.join(self.workspace_root, f"eval_results_{timestamp}")
+            self.output_dir = os.path.join(base_dir, f"eval_results_{timestamp}")
             os.makedirs(self.output_dir, exist_ok=True)
 
         if not hasattr(self, 'report_file'):

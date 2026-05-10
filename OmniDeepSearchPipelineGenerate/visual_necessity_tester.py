@@ -18,7 +18,7 @@ class VisualNecessityTester:
 
         provider_name = self.config['llm'].get('filter_provider', 'gpt')
         self.llm = get_llm_provider(self.config['llm'], provider_name)
-    def restructure_sample(sample: dict):
+    def restructure_sample(self,sample: dict):
         if 'challenge' in sample:
             chall = sample['challenge']
             question = None
@@ -50,7 +50,7 @@ class VisualNecessityTester:
             del sample['kg_info']
         return sample
     
-    def run_blind_search(self, item):
+    async def run_blind_search(self, item):
         question = item['challenge']['challenges'][0]['question']
         identity_hint = item.get('video_info', {}).get('identity', 'Unknown Subject')
         user_p = (
@@ -60,7 +60,7 @@ class VisualNecessityTester:
             f"Based on the identity '{identity_hint}', search if any text explicitly mentions "
             f"the visual answer. If nothing is found, you MUST conclude that you cannot answer."
         )
-        response = self.llm.generate(
+        response = await self.llm.agenerate(
             system_prompt=self.system_prompt,
             user_prompt=user_p
         )
@@ -83,9 +83,9 @@ class VisualNecessityTester:
                     args = tool_json.get("arguments", tool_json)
                     queries = args.get("query_list", [identity_hint])
                     logger.info(f"      [Action] Text Search: {queries}")
-                    search_res = mm_text_search(queries, self.config, question, current_res)
+                    search_res = await mm_text_search(queries, self.config, question, current_res)
                     messages.append({"role": "user", "content": f"<tool_response>\n{search_res['result']}\n</tool_response>"})
-                    current_res = self.llm.generate(messages=messages)
+                    current_res = await self.llm.agenerate(messages=messages)
                     messages.append({"role": "assistant", "content": current_res})
                 except Exception as e:
                     logger.error(f"      [Tool Parse Error]: {e}")
@@ -94,15 +94,15 @@ class VisualNecessityTester:
                 return current_res
         return "Search inconclusive."
 
-    def check_leakage(self, prediction, ground_truth):
+    async def check_leakage(self, prediction, ground_truth):
         if len(prediction) < 5 or "inconclusive" in prediction.lower() or "cannot answer" in prediction.lower():
             return False
         sys_p = "You are a high-precision semantic auditor."
         user_p = f"Does the Prediction accurately describe the Ground Truth visual detail?\n[GT]: {ground_truth}\n[Pred]: {prediction}\nAnswer 'YES' or 'NO'."
-        res = self.llm.generate(system_prompt=sys_p, user_prompt=user_p)
+        res = await self.llm.agenerate(system_prompt=sys_p, user_prompt=user_p)
         return "YES" in res.upper()
 
-    def process_json_file(self, input_path):
+    async def process_json_file(self, input_path):
         if not os.path.exists(input_path):
             logger.error(f"File not found: {input_path}")
             return
@@ -123,8 +123,8 @@ class VisualNecessityTester:
                     gt_visual_desc = gt_obj.get('visual_verification_answer') or gt_obj.get('visual_action_description', str(gt_obj))
                 else:
                     gt_visual_desc = str(gt_obj)
-                prediction = self.run_blind_search(item)
-                if self.check_leakage(prediction, gt_visual_desc):
+                prediction = await self.run_blind_search(item)
+                if await self.check_leakage(prediction, gt_visual_desc):
                     logger.warning(f"    => [REJECT] Information leaked!")
                     total_leaked += 1
                 else:

@@ -12,18 +12,18 @@ llm:
   mimo:
     api_key: "" 
     base_url: ""
-    model_name: "xiaomi/mimo-v2.5"
+    model_name: ""
     temperature: 0.0
-    max_tokens: 32768 
+    max_tokens:  
     timeout: 300
     max_concurrency: 20
 
   qwen:
     api_key: "" 
     base_url: ""
-    model_name: "qwen3.5-omni-plus"  
+    model_name: ""  
     temperature: 0.0
-    max_tokens: 8192  
+    max_tokens:   
     timeout: 300
     max_concurrency: 10
 
@@ -31,9 +31,9 @@ llm:
   gemini:
     api_key: ""
     base_url: ""
-    model_name: "gemini-3.1-pro-preview"
+    model_name: ""
     temperature: 0.0
-    max_tokens: 32768
+    max_tokens: 
     timeout: 250
     max_concurrency: 20
 
@@ -42,7 +42,7 @@ llm:
     base_url: ""
     model_name: ""
     temperature: 0.0
-    max_tokens: 16384
+    max_tokens: 
     timeout: 300
     max_concurrency: 10
 
@@ -50,18 +50,18 @@ llm:
   gpt:
     api_key: ""
     base_url: ""
-    model_name: "gpt-5.4"
+    model_name: ""
     temperature: 0.0
-    max_tokens: 16384
+    max_tokens: 
     timeout: 250
     max_concurrency: 20
 
   claude:
     api_key: ""
     base_url: ""
-    model_name: "claude-sonnet-4-6" 
+    model_name: "" 
     temperature: 0.0
-    max_tokens: 16384
+    max_tokens: 
     timeout: 250
     max_concurrency: 20
 

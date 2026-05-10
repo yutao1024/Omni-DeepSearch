@@ -185,7 +185,7 @@ class AudioToImagePipeline(AudioDeepSearchPipeline):
             if os.path.exists(final_nec_path):
                 logger.info("========== STEP 4: VISUAL NECESSITY TESTING ==========")
                 visual_tester = VisualNecessityTester(self.config, self.prompts)
-                final_verified_path = visual_tester.process_json_file(final_nec_path)
+                final_verified_path = await visual_tester.process_json_file(final_nec_path)
                 logger.info(f"DONE! Final Visual-Verified Dataset: {final_verified_path}")
         else:
             logger.warning("No items passed the quality filter. Skipping Step 3 & 4.")

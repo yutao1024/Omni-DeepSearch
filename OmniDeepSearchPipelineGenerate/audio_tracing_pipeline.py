@@ -672,7 +672,7 @@ class AudioTracingPipeline(AudioDeepSearchPipeline):
         
         if os.path.exists(target_file_for_visual_test):
             visual_tester = VisualNecessityTester(self.config, self.prompts)
-            visual_tester.process_json_file(target_file_for_visual_test)
+            await visual_tester.process_json_file(target_file_for_visual_test)
         else:
             logger.warning("File missing, skipping Visual Necessity Test.")
 
