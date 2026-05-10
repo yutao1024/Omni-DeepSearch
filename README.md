@@ -111,6 +111,35 @@ cookies_path: "config/cookies.txt"
 - Make sure all API keys are valid and have sufficient quota.  
 - Adjust the `workspace` path if you want your downloads and generated data to reside elsewhere (e.g., an external drive).
 
+#### 5. Tuning acquisition volume
+The amount of data downloaded and the diversity of the final benchmark are controlled by several settings in `config.yaml`. Add or modify them under the `acquisition`, `max_threads`, and `sampling` sections according to your needs.
+
+| Parameter | Section | Description |
+|-----------|---------|-------------|
+| `themes_per_domain` | `acquisition` | Number of distinct topics/themes the LLM generates for each audio domain (SPEECH, MUSIC, BIO, ENV). Each theme leads to one or more YouTube searches. |
+| `queries_per_theme` | `acquisition` | How many different YouTube search queries the LLM creates per theme. More queries increase the chance of finding suitable, high‑quality videos. |
+| `videos_per_query` | `acquisition` | Maximum number of videos the pipeline attempts to download for each search query. Higher values provide fallback options. |
+| `max_threads` | root | Maximum number of concurrent download/processing tasks. Raise this for faster downloads; lower it if you encounter rate‑limit errors. |
+| `interval` | `sampling` | Time in seconds between consecutive slices taken from a downloaded video. |
+| `audio_duration` | `sampling` | Duration in seconds of each extracted audio clip. |
+| `max_samples_per_video` | `sampling` | Maximum number of consecutive slices used from a single video when building a clip. |
+
+Example for increasing collection scale:
+```yaml
+acquisition:
+  workspace: large_workspace
+  themes_per_domain: 10
+  queries_per_theme: 3
+  videos_per_query: 2
+max_threads: 20
+sampling:
+  interval: 8.0
+  audio_duration: 12.0
+  max_samples_per_video: 4
+```
+
+These values directly influence the total number of downloaded videos, the size of the generated benchmark, and the load on your system and API quotas. Adjust them based on your machine’s capacity and your target dataset size.
+
 ### 🧪 Running the Pipelines
 
 All tasks are managed through a single entry point `run_pipeline.py`.  
