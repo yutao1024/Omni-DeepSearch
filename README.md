@@ -141,17 +141,30 @@ serper_api_key: "your-serper-key"     # used for web search (Serper.dev)
 jina_api_key: "your-jina-key"         # used for full‑text webpage extraction (Jina.ai)
 
 llm:
-  default_provider: ""               # main model for generation 
-  filter_provider: ""                # lighter model for filtering/auditing tasks
+  # ── Provider Selection (which provider to use for each role) ──
+  default_provider: "gemini"                 # used for question generation
+  filter_provider: "gpt"                     # used for lightweight quality filtering
+  inference_provider: "gemini"               # used for final benchmark evaluation
+
+  # ── Provider Configurations (API keys, endpoints, model params) ──
   gemini:
-    api_key: ""                 # API key for the provider
-    base_url: ""                # Base URL of the API endpoint
-    model_name: ""              # Exact model name 
-    temperature: 0.0            # Sampling temperature (0.0 = deterministic)
-    max_tokens:                 # Max tokens in the response (leave blank for default)
-    timeout: 300                # Request timeout in seconds
-    max_concurrency: 20         # Max parallel requests to this provider
-  # add other providers (qwen, gpt, claude, mimo) similarly
+    api_key: "YOUR_GEMINI_API_KEY"          # your API key from the provider
+    base_url: "your-base-url"               # API base URL (official or proxy)
+    model_name: "gemini-3.1-pro-preview"    # exact model identifier
+    temperature: 0.0                        # 0.0 = deterministic
+    max_tokens: 16384                       # max response tokens
+    timeout: 300                            # request timeout (seconds)
+    max_concurrency: 20                     # max parallel requests to this provider
+
+  gpt:
+    api_key: "YOUR_GPT_API_KEY"             # your API key from OpenAI
+    base_url: "your-base-url"               # official endpoint or proxy
+    model_name: "gpt-5.4"                   # exact model identifier
+    temperature: 0.0
+    max_tokens: 16384
+    timeout: 300
+    max_concurrency: 20
+  # add other providers (qwen, claude, mimo) in the same way
 
 # Where downloaded videos and generated benchmarks will be stored
 acquisition:
@@ -207,18 +220,20 @@ The amount of data downloaded and the diversity of the final benchmark are contr
 | `audio_duration` | `sampling` | Duration in seconds of each extracted audio clip. |
 | `max_samples_per_video` | `sampling` | Maximum number of consecutive slices used from a single video when building a clip. |
 
-Example for increasing collection scale:
+Example for increasing collection scale (applied during the **acquisition / data generation** stage):
 ```yaml
-acquisition:
-  workspace: large_workspace
-  themes_per_domain: 10
-  queries_per_theme: 3
-  videos_per_query: 2
+acquisition:                           # applied during the acquisition (data generation) stage
+  workspace: data_workspace            # root directory for downloads and generated benchmarks
+  themes_per_domain: 10                # topics per audio domain (SPEECH/MUSIC/BIO/ENV)
+  queries_per_theme: 2                 # YouTube search queries per topic
+  videos_per_query: 2                  # max videos to download per query
 sampling:
-  interval: 8.0
-  audio_duration: 12.0
-  max_samples_per_video: 4
+  interval: 10.0                        # seconds between consecutive video slices
+  audio_duration: 10.0                 # length of each extracted audio clip (seconds)
+  max_samples_per_video: 5             # max consecutive slices used when building a clip
 ```
+This configuration moves from a small test run to a medium‑scale dataset build. Adjust the numbers according to your disk space, network speed, and API quotas.
+
 
 These values directly influence the total number of downloaded videos, the size of the generated benchmark, and the load on your system and API quotas. Adjust them based on your machine’s capacity and your target dataset size.
 
