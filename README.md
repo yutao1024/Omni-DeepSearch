@@ -165,7 +165,7 @@ llm:
   gpt:
     api_key: "YOUR_GPT_API_KEY"             # your API key from OpenAI
     base_url: "your-base-url"               # official endpoint or proxy
-    model_name: "gpt-5.4"                   # exact model identifier
+    model_name: "gpt-5"                   # exact model identifier
     temperature: 0.0
     max_tokens: 16384
     timeout: 300
