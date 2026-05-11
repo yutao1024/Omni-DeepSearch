@@ -312,8 +312,6 @@ If you have already successfully run `acquire-audio` (or `tracing` acquisition) 
 
 ### 📊 Direct Data Download & Evaluation
 
-After generating benchmarks, you can evaluate model performance using the evaluation command.
-
 If you’ve downloaded the Omni‑DeepSearch dataset from Hugging Face (e.g., with `huggingface_hub`), you can evaluate it directly without re‑running the generation pipelines. Simply point the `evaluate` command to the `merged.json` file and make sure the audio clips are placed in a folder named `audio_clips` next to it:
 After downloading, your dataset directory should look like this:
 ```
