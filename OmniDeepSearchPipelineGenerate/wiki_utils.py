@@ -42,7 +42,9 @@ def _sync_process_image(file_content, image_url, save_path, max_image_pixels):
 async def download_and_resize_image(image_url: str, save_path: str, max_image_pixels: int = 1024 * 1024) -> str:
     max_retries = 3
     base_delay = 2
-    headers = {}
+    headers = {
+        'User-Agent': 'OmniDeepSearch/1.0 (your-email@example.com)'
+    }
 
     async with aiohttp.ClientSession(headers=headers) as session:
         for attempt in range(max_retries):
