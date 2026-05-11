@@ -203,7 +203,7 @@ headers = {
 
 - **Cookies file (cookies_path):**  
   The pipeline downloads videos from YouTube. To bypass age‑restrictions and playback limits you must export a `cookies.txt` file from your browser while logged into a YouTube account.  
-  - Use a browser extension like “Get cookies.txt LOCALLY” (Chrome[https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc], Edge) or “cookies.txt” (Firefox) while on youtube.com.  
+  - Use a browser extension like “Get cookies.txt LOCALLY” (Chrome(https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc), Edge) or “cookies.txt” (Firefox) while on youtube.com.  
   - Save the exported file as `config/cookies.txt`.  
 
 - **LLM Provider Keys:**  
