@@ -1,0 +1,53 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Virtual environments ----
+venv/
+.venv/
+env/
+ENV/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ---- Secrets (do NOT commit) ----
+# YouTube session cookies — personal credential.
+# Ship a `cookies.txt.example` instead if needed.
+OmniDeepSearchPipelineGenerate/config/cookies.txt
+**/cookies.txt
+.env
+.env.*
+!.env.example
+
+# ---- Runtime logs ----
+OmniDeepSearchPipelineGenerate/llm_provider.log
+OmniDeepSearchPipelineGenerate/logs/
+*.log
+
+# ---- Search / image / video caches ----
+OmniDeepSearchPipelineGenerate/search_cache/
+OmniDeepSearchPipelineGenerate/search_log/
+
+# ---- Generated dataset workspace ----
+# Keep the `data_workspace/.gitkeep` placeholder, drop everything else.
+OmniDeepSearchPipelineGenerate/data_workspace/*
+!OmniDeepSearchPipelineGenerate/data_workspace/.gitkeep
+
+# ---- Evaluation outputs ----
+eval_results_*/
+final_report.json
+final_report.json.tmp
+*.tmp
