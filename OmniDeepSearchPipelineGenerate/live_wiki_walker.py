@@ -25,7 +25,7 @@ class LiveWikiWalker:
             self.prompts_config = {}
 
         self.headers = {
-        'User-Agent': 'your-email@example.com'
+            'User-Agent': 'OmniDeepSearch/1.0 (your-email@example.com)'
         }
         self.semaphore = asyncio.Semaphore(max_concurrent) 
 
