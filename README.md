@@ -39,8 +39,8 @@ Access the Omni-DeepSearch dataset, featuring complex multi-hop reasoning audio 
 - [Installation](#installation)
 - [Configuration](#4-configuration)
 - [Tuning acquisition volume](#5-tuning-acquisition-volume)
-- [Running the Pipelines](#-Running-the-Pipelines)
-- [Inference & Evaluation](#-inference--evaluation)
+- [Data Generation & Evaluation](#-Data-Generation--Evaluation)
+- [Direct Data Download & Evaluation](#-Direct-Data-Download--Evaluation)
 ### Prerequisites  
 Before installation, ensure you have the following system dependencies installed:
 - **Python** 3.8+
@@ -242,7 +242,7 @@ This configuration moves from a small test run to a medium‑scale dataset build
 
 These values directly influence the total number of downloaded videos, the size of the generated benchmark, and the load on your system and API quotas. Adjust them based on your machine’s capacity and your target dataset size.
 
-### 🧪 Running the Pipelines
+### 🧪 Data Generation & Evaluation
 
 All tasks are managed through a single entry point `run_pipeline.py`.  
 You can also run individual scripts directly if you already have the necessary downloaded videos.
@@ -310,7 +310,7 @@ If you have already successfully run `acquire-audio` (or `tracing` acquisition) 
 - The acquisition stage remembers already downloaded video IDs and processed themes using JSON logs inside the workspace. You can safely interrupt and resume `acquire-audio`, `single-qa`, `image-qa`, or `multi-qa` without re‑downloading already processed items.  
 - For evaluation, the pipeline automatically detects existing `final_report.json` and skips samples that have already been processed.
 
-### 📊 Inference & Evaluation
+### 📊 Direct Data Download & Evaluation
 
 After generating benchmarks, you can evaluate model performance using the evaluation command.
 
