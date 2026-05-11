@@ -190,7 +190,7 @@ Two files in the project are responsible for Wikipedia access and have been preâ
 Example after editing:
 ```python
 headers = {
-    'User-Agent': 'OmniDeepSearch/1.0 (your-real-email@example.com)'
+    'User-Agent': 'OmniDeepSearch/1.0 (your-email@example.com)'
 }
 ```
 **How to obtain the required API keys:**
