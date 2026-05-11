@@ -106,7 +106,6 @@ async def call_serpapi(query: str, topk: int, search_api_key: str) -> List[Dict[
 
 
 @async_retry(max_retries=3)
-@async_retry(max_retries=3)
 async def call_serper(query: str, topk: int = 3, api_key: str = None) -> List[Dict[str, str]]:
     if not api_key:
         logger.error("Serper API key is missing")
