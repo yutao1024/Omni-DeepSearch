@@ -2,7 +2,7 @@
   <img width="800" alt="pipeline" src="assets/main.png" />
   <br/>
 
-[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/) [![GitHub Repo](https://img.shields.io/badge/GitHub-Omni--Bench-24292F?style=flat-square&logo=github&logoColor=white)](https://github.com/yutao1024/Omni-DeepSearch) [![arXiv](https://img.shields.io/badge/arXiv-0000.00000-B31B1B?style=flat-square&logo=arxiv&logoColor=white)]() [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-orange)](https://huggingface.co/datasets/Kirito-Lab/Omni-DeepSearch)
+[![Python](https://img.shields.io/badge/Python-3.8+-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/) [![GitHub Repo](https://img.shields.io/badge/GitHub-Omni--Bench-24292F?style=flat-square&logo=github&logoColor=white)](https://github.com/yutao1024/Omni-DeepSearch) [![arXiv](https://img.shields.io/badge/arXiv-2605.08762-B31B1B?style=flat-square&logo=arxiv&logoColor=white)](https://arxiv.org/abs/2605.08762) [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Dataset-orange)](https://huggingface.co/datasets/Kirito-Lab/Omni-DeepSearch)
 
   ✨ **Focus on Multimodal Audio Deep-Search: Automated generation, filtering, and evaluation of multi-hop reasoning benchmarks** ✨  
 
@@ -19,9 +19,9 @@
 
 ## 🔥 News
 
-**[202X/0X/0X]** 🚀 Omni-DeepSearch dataset is now officially live on Hugging Face! Click here to explore our [Dataset](https://huggingface.co/datasets/Kirito-Lab/Omni-DeepSearch).
+**[2026/05/12]** 🚀 Omni-DeepSearch dataset is now officially live on Hugging Face! Click here to explore our [Dataset](https://huggingface.co/datasets/Kirito-Lab/Omni-DeepSearch).
 
-**[202X/0X/0X]** 📄 Omni-DeepSearch is now available on [arXiv]().
+**[2026/05/09]** 📄 Omni-DeepSearch is now available on [arXiv](https://arxiv.org/abs/2605.08762).
 
 ## 🌈 Overview    
 
@@ -357,13 +357,13 @@ Simply run the exact same command again (with the same output directory or file)
 ## 📖 Citation
 Please kindly cite our paper if you find this project or dataset helpful.
 ```bibtex
-@misc{omnideepsearch202X,
-      title={}, 
-      author={},
-      year={},
-      eprint={},
+@misc{omnideepsearch2026,
+      title={Omni-DeepSearch: A Benchmark for Audio-Driven Omni-Modal Deep Search}, 
+      author={Tao Yu and yiming ding and Shenghua Chai and Minghui Zhang and Zhongtian Luo and Xinming Wang and Xinlong Chen and Zhaolu Kang and Junhao Gong and Yuxuan Zhou and Haopeng Jin and Zhiqing Cui and Jiabing Yang and YiFan Zhang and Hongzhu Yi and Zheqi He and Xi Yang and Yan Huang and Liang Wang},
+      year={2026},
+      eprint={2605.08762},
       archivePrefix={arXiv},
-      primaryClass={},
-      url={}, 
+      primaryClass={cs.SD},
+      url={https://arxiv.org/abs/2605.08762}, 
 }
 ```
